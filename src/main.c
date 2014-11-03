@@ -1,39 +1,67 @@
 #include "main.h"
+#include <math.h>
 
-uint8_t state = 0x00;
-uint8_t val = 0x00;
+#define PI 3.14159265
+#define BUFFER_LENGTH 32
+
+int audioBuffer[BUFFER_LENGTH];
 
 int main(){
+  int i;
+  // float val;
+  setupPLL();
   setupClocks();
   setupGPIO();
-  setupTimer2();
-  setupI2S();
   setupI2C();
   setupCS32L22();
-  __enable_irq();
+  setupI2S();
 
-  while(1)
+  for (i = 0; i < BUFFER_LENGTH/2; i++)
   {
-    val++;
-    if (val > 0x0F){
-      val = 0x0F;
+
+    // val = 1024*sin(i*(2*PI/BUFFER_LENGTH));
+    // audioBuffer[i] = (int)val;
+
+    audioBuffer[i] = 1;
+    audioBuffer[i+BUFFER_LENGTH/2] = -1;
+
+    // int val = i*1/(BUFFER_LENGTH/4);
+    // audioBuffer[i] = val;
+    // audioBuffer[i+(BUFFER_LENGTH/4)] = 1 - val;
+    // audioBuffer[i+(BUFFER_LENGTH/2)] = - val;
+    // audioBuffer[i+(3*BUFFER_LENGTH/4)] = val - 1;
+  }
+
+  i = 0;
+  while(1){
+    if (i == BUFFER_LENGTH*2){
+      GPIO_ResetBits(GPIOD, GPIO_Pin_12 | GPIO_Pin_13|
+       GPIO_Pin_14 | GPIO_Pin_15);
+      i = 0;
+      processAudio();
     }
-    // if the flag is set, we can send our data
-    if (SPI_I2S_GetFlagStatus(SPI3, SPI_I2S_FLAG_TXE))
-    {
-      if (state == 0x00)
-      {
-        // state is 0, send unshifted slope
-        SPI_I2S_SendData(SPI3, val);
-      }
-      else
-      {
-        // statse is 1, send shifted slope
-        SPI_I2S_SendData(SPI3, 0xFF - val);
-      }
+    if (i < BUFFER_LENGTH/2) {
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
+    }
+    if (i > BUFFER_LENGTH/2) {
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
+    }
+    if (i > BUFFER_LENGTH) {
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
+    }
+    if (i > 3*BUFFER_LENGTH/2) {
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
+    }
+    if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE)){
+      SPI_I2S_SendData(SPI3, (int16_t)audioBuffer[i/2]);
+      i++;
     }
   }
   return 0;
+}
+
+void processAudio() {
+
 }
 
 void setupClocks() {
@@ -44,21 +72,22 @@ void setupClocks() {
    RCC_AHB1Periph_GPIOD, ENABLE); // reset pin on the DAC
 
   // enable the serial peripherals
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 |
-   RCC_APB1Periph_SPI3, ENABLE);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3, ENABLE);
+}
 
-  // enable the PLL for the I^2S
+void setupPLL() {
+  RCC_PLLI2SCmd(DISABLE);
+  RCC_I2SCLKConfig(RCC_I2S2CLKSource_PLLI2S);
   RCC_PLLI2SCmd(ENABLE);
-
-  // enable timer2
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+  while(!RCC_GetFlagStatus(RCC_FLAG_PLLI2SRDY));
 }
 
 void setupGPIO() {
   GPIO_InitTypeDef GPIO_initStruct;
 
   // cs43L22 reset
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_4;;
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_12 | GPIO_Pin_13 |
+  GPIO_Pin_14 | GPIO_Pin_15;
   GPIO_initStruct.GPIO_Mode = GPIO_Mode_OUT;
   GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
   GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
@@ -66,9 +95,9 @@ void setupGPIO() {
   GPIO_Init(GPIOD, &GPIO_initStruct);
 
   // I2C1
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_9;
   GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF;
   GPIO_initStruct.GPIO_OType = GPIO_OType_OD;
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_9;
   GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
   GPIO_initStruct.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_Init(GPIOB, &GPIO_initStruct);
@@ -77,8 +106,8 @@ void setupGPIO() {
   GPIO_PinAFConfig(GPIOB, GPIO_PinSource9, GPIO_AF_I2C1);
 
   // I2S
-  GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
   GPIO_initStruct.GPIO_Pin = GPIO_Pin_7 | GPIO_Pin_10 | GPIO_Pin_12;
+  GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
   GPIO_Init(GPIOC, &GPIO_initStruct);
 
   GPIO_initStruct.GPIO_Pin = GPIO_Pin_4;
@@ -95,7 +124,7 @@ void setupGPIO() {
 
 void setupI2S() {
   I2S_InitTypeDef I2S_InitType;
-  I2S_InitType.I2S_AudioFreq = I2S_AudioFreq_48k;
+  I2S_InitType.I2S_AudioFreq = I2S_AudioFreq_192k;
   I2S_InitType.I2S_MCLKOutput = I2S_MCLKOutput_Enable;
   I2S_InitType.I2S_Mode = I2S_Mode_MasterTx;
   I2S_InitType.I2S_DataFormat = I2S_DataFormat_16b;
@@ -105,6 +134,8 @@ void setupI2S() {
   I2S_Init(SPI3, &I2S_InitType);
 
   I2S_Cmd(SPI3, ENABLE);
+
+  setupPLL();
 }
 
 void setupI2C() {
@@ -119,8 +150,7 @@ void setupI2C() {
   I2C_Cmd(I2C1, ENABLE);
 }
 
-void writeI2CData(uint8_t bytesToSend[], uint8_t numOfBytesToSend)
-{
+void writeI2CData(uint8_t bytesToSend[], uint8_t numOfBytesToSend){
   uint8_t currentBytesValue = 0;
 
   // wait for bus to free
@@ -145,22 +175,28 @@ void writeI2CData(uint8_t bytesToSend[], uint8_t numOfBytesToSend)
   I2C_GenerateSTOP(I2C1, ENABLE);
 }
 
-void setupCS32L22()
-{
+void setupCS32L22(){
+  int delaycount;
   uint8_t sendBuffer[2];
 
   GPIO_SetBits(GPIOD, GPIO_Pin_4); // set the reset pin high
 
-  sendBuffer[0] = 0x1A; //set the PCM channel A gain to +6 dB
-  sendBuffer[1] = 0x0A;
-  writeI2CData(sendBuffer, 2);
-
-  sendBuffer[0] = 0x1B; //set the PCM channel B gain to +6 dB
-  sendBuffer[1] = 0x0A;
-  writeI2CData(sendBuffer, 2);
+  delaycount = 1000000; // wait for the DAC to enter reset mode
+  while (delaycount > 0)
+  {
+    delaycount--;
+  }
 
   sendBuffer[0] = 0x04; // use only the headphone output
   sendBuffer[1] = 0xAF;
+  writeI2CData(sendBuffer, 2);
+
+  sendBuffer[0] = 0x05; // auto-detect clock, divide MCLK by 2
+  sendBuffer[1] = 0x81;
+  writeI2CData(sendBuffer, 2);
+
+  sendBuffer[0] = 0x06; // i2s mode, 16bit word length
+  sendBuffer[1] = 0x81;
   writeI2CData(sendBuffer, 2);
 
   // -------------------------
@@ -191,23 +227,4 @@ void setupCS32L22()
   sendBuffer[0] = 0x02; // this tells the board to not take any
   sendBuffer[1] = 0x9E; // new settings
   writeI2CData(sendBuffer, 2);
-}
-
-void setupTimer2()
-{
-  TIM_TimeBaseInitTypeDef timer;
-  TIM_TimeBaseStructInit(&timer);
-  timer.TIM_Prescaler = 749;
-  timer.TIM_Period = 0xff;
-  TIM_TimeBaseInit(TIM2, &timer);
-  TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
-  TIM_Cmd(TIM2, ENABLE);
-  NVIC_EnableIRQ(TIM2_IRQn);
-}
-
-void TIM2_IRQHandler()
-{
-  TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
-  state ^= 0x01;
-  val = 0x00;
 }
