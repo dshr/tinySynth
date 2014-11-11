@@ -3,65 +3,71 @@
 
 #define PI 3.14159265
 #define BUFFER_LENGTH 32
+#define SAMPLING_FREQ 192000
+#define FREQ_DIV 3.0f
+#define NOTE_FREQ 440.0f
+#define WT_SIZE 1024
 
-int audioBuffer[BUFFER_LENGTH];
+int16_t audioBuffer[BUFFER_LENGTH];
+float inverse_sampling_freq = FREQ_DIV / SAMPLING_FREQ;
+float phase;
 
 int main(){
   int i;
-  // float val;
+
   setupPLL();
   setupClocks();
   setupGPIO();
+
+  phase = 0;
+  GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
+
+  fillInBuffer();
+  GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
+
   setupI2C();
   setupCS32L22();
   setupI2S();
 
-  for (i = 0; i < BUFFER_LENGTH/2; i++)
-  {
-
-    // val = 1024*sin(i*(2*PI/BUFFER_LENGTH));
-    // audioBuffer[i] = (int)val;
-
-    audioBuffer[i] = 1;
-    audioBuffer[i+BUFFER_LENGTH/2] = -1;
-
-    // int val = i*1/(BUFFER_LENGTH/4);
-    // audioBuffer[i] = val;
-    // audioBuffer[i+(BUFFER_LENGTH/4)] = 1 - val;
-    // audioBuffer[i+(BUFFER_LENGTH/2)] = - val;
-    // audioBuffer[i+(3*BUFFER_LENGTH/4)] = val - 1;
-  }
-
   i = 0;
   while(1){
-    if (i == BUFFER_LENGTH*2){
-      GPIO_ResetBits(GPIOD, GPIO_Pin_12 | GPIO_Pin_13|
-       GPIO_Pin_14 | GPIO_Pin_15);
+    if (i >= BUFFER_LENGTH*2){
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_14 | GPIO_Pin_15);
       i = 0;
-      processAudio();
-    }
-    if (i < BUFFER_LENGTH/2) {
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
-    }
-    if (i > BUFFER_LENGTH/2) {
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
-    }
-    if (i > BUFFER_LENGTH) {
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-    }
-    if (i > 3*BUFFER_LENGTH/2) {
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
+      fillInBuffer();
     }
     if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE)){
-      SPI_I2S_SendData(SPI3, (int16_t)audioBuffer[i/2]);
+      SPI_I2S_SendData(SPI3, audioBuffer[i/2]);
       i++;
     }
   }
   return 0;
 }
 
-void processAudio() {
+void fillInBuffer() {
+  int index;
+  GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
 
+  for (index = 0; index < BUFFER_LENGTH; index++)
+  {
+    // // generate sin
+    // float sample = 0.8f * sin(phase);
+    // audioBuffer[index] = sample;
+    // generate square
+    if (phase > PI)
+    {
+      audioBuffer[index] = -100;
+    } else {
+      audioBuffer[index] = 100;
+    }
+
+    phase += 2.0 * PI * NOTE_FREQ * inverse_sampling_freq;
+    if (phase > 2.0*PI) //wrap around
+    {
+      phase -= 2.0*PI;
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
+    }
+  }
 }
 
 void setupClocks() {
