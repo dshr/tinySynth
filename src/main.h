@@ -1,6 +1,6 @@
 #include "stm32f4xx_conf.h"
 
-void processAudio();
+void fillInBuffer();
 
 void setupClocks();
 void setupGPIO();
