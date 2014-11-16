@@ -13,6 +13,12 @@ float inverse_sampling_freq = FREQ_DIV / SAMPLING_FREQ;
 float phase;
 
 int main(){
+
+  // enable the FPU
+  *((volatile unsigned long*)0xE000ED88) = 0xF << 20;
+
+  // do stuff
+
   int i;
   int16_t sample;
 
