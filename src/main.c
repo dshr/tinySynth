@@ -5,12 +5,12 @@
 #define BUFFER_LENGTH 16
 #define SAMPLING_FREQ 48000
 #define FREQ_DIV 3
-#define NOTE_FREQ 440.0f
 #define AMPLITUDE 31000
 
 int16_t audioBuffer[BUFFER_LENGTH];
-float inverse_sampling_freq = (float) FREQ_DIV / SAMPLING_FREQ;
+float inverse_sampling_freq;
 float phase;
+float osc1_freq;
 
 int main(){
 
@@ -27,8 +27,10 @@ int main(){
   setupGPIO();
 
   phase = (float) 0.0;
-  GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
+  osc1_freq = 440.0f;
+  inverse_sampling_freq = (float) FREQ_DIV / SAMPLING_FREQ;
 
+  GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
   fillInBuffer();
   GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
 
@@ -47,6 +49,12 @@ int main(){
       i = 0;
       fillInBuffer();
     }
+    if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) != 0){
+      osc1_freq = 880.0f;
+    }
+    else {
+      osc1_freq = 440.0f;
+    }
   }
   return 0;
 }
@@ -61,7 +69,7 @@ void fillInBuffer() {
     float sample = AMPLITUDE * sinf(phase);
     audioBuffer[i] = (int16_t) sample;
 
-    phase += (float) 2.0 * PI * NOTE_FREQ * inverse_sampling_freq;
+    phase += (float) 2.0 * PI * osc1_freq * inverse_sampling_freq;
     if (phase > (float) 2.0*PI) //wrap around
     {
       phase -= (float) 2.0*PI;
@@ -91,7 +99,7 @@ void setupPLL() {
 void setupGPIO() {
   GPIO_InitTypeDef GPIO_initStruct;
 
-  // cs43L22 reset
+  // cs43L22 reset & the LEDs
   GPIO_initStruct.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_12 | GPIO_Pin_13 |
   GPIO_Pin_14 | GPIO_Pin_15;
   GPIO_initStruct.GPIO_Mode = GPIO_Mode_OUT;
@@ -116,13 +124,22 @@ void setupGPIO() {
   GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
   GPIO_Init(GPIOC, &GPIO_initStruct);
 
+  GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_SPI3);
+  GPIO_PinAFConfig(GPIOC, GPIO_PinSource10, GPIO_AF_SPI3);
+  GPIO_PinAFConfig(GPIOC, GPIO_PinSource12, GPIO_AF_SPI3);
+
   GPIO_initStruct.GPIO_Pin = GPIO_Pin_4;
   GPIO_Init(GPIOA, &GPIO_initStruct);
 
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource4, GPIO_AF_SPI3);
-  GPIO_PinAFConfig(GPIOC, GPIO_PinSource7, GPIO_AF_SPI3);
-  GPIO_PinAFConfig(GPIOC, GPIO_PinSource10, GPIO_AF_SPI3);
-  GPIO_PinAFConfig(GPIOC, GPIO_PinSource12, GPIO_AF_SPI3);
+
+  // user button
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_0;
+  GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN;
+  GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
+  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
+  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOA, &GPIO_initStruct);
 
   // reset the cs43L22
   GPIO_ResetBits(GPIOD, GPIO_Pin_4);
