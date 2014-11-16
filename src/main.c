@@ -1,15 +1,15 @@
 #include "main.h"
 #include <math.h>
 
-#define PI 3.14159265
-#define BUFFER_LENGTH 16384
-#define SAMPLING_FREQ 192000
-#define FREQ_DIV 3.0
-#define NOTE_FREQ 440.0
-#define AMPLITUDE 1
+#define PI 3.14159265f
+#define BUFFER_LENGTH 16
+#define SAMPLING_FREQ 48000
+#define FREQ_DIV 3
+#define NOTE_FREQ 440.0f
+#define AMPLITUDE 31000
 
 int16_t audioBuffer[BUFFER_LENGTH];
-float inverse_sampling_freq = FREQ_DIV / SAMPLING_FREQ;
+float inverse_sampling_freq = (float) FREQ_DIV / SAMPLING_FREQ;
 float phase;
 
 int main(){
@@ -26,7 +26,7 @@ int main(){
   setupClocks();
   setupGPIO();
 
-  phase = 0.0;
+  phase = (float) 0.0;
   GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
 
   fillInBuffer();
@@ -38,41 +38,33 @@ int main(){
 
   i = 0;
   while(1){
+    while(!SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE));
+    sample = audioBuffer[i/2];
+    SPI_I2S_SendData(SPI3, sample);
+    i++;
     if (i == BUFFER_LENGTH*2){
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_14 | GPIO_Pin_15);
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
       i = 0;
       fillInBuffer();
-    }
-    if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE)){
-      sample = audioBuffer[i/2];
-      SPI_I2S_SendData(SPI3, sample);
-      i++;
     }
   }
   return 0;
 }
 
 void fillInBuffer() {
-  int index;
+  int i;
   GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
 
-  for (index = 0; index < BUFFER_LENGTH; index++)
+  for (i = 0; i < BUFFER_LENGTH; i++)
   {
-    // // generate sin
-    // float sample = 0.8f * sinf(phase);
-    // audioBuffer[index] = sample;
-    // generate square
-    if (phase > PI)
-    {
-      audioBuffer[index] = -AMPLITUDE;
-    } else {
-      audioBuffer[index] = AMPLITUDE;
-    }
+    // generate sin
+    float sample = AMPLITUDE * sinf(phase);
+    audioBuffer[i] = (int16_t) sample;
 
-    phase += 2.0 * PI * NOTE_FREQ * inverse_sampling_freq;
-    if (phase > 2.0*PI) //wrap around
+    phase += (float) 2.0 * PI * NOTE_FREQ * inverse_sampling_freq;
+    if (phase > (float) 2.0*PI) //wrap around
     {
-      phase -= 2.0*PI;
+      phase -= (float) 2.0*PI;
       GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
     }
   }
@@ -138,7 +130,7 @@ void setupGPIO() {
 
 void setupI2S() {
   I2S_InitTypeDef I2S_InitType;
-  I2S_InitType.I2S_AudioFreq = I2S_AudioFreq_192k;
+  I2S_InitType.I2S_AudioFreq = I2S_AudioFreq_48k;
   I2S_InitType.I2S_MCLKOutput = I2S_MCLKOutput_Enable;
   I2S_InitType.I2S_Mode = I2S_Mode_MasterTx;
   I2S_InitType.I2S_DataFormat = I2S_DataFormat_16b;
@@ -209,8 +201,8 @@ void setupCS32L22(){
   sendBuffer[1] = 0x81;
   writeI2CData(sendBuffer, 2);
 
-  sendBuffer[0] = 0x06; // i2s mode, 16bit word length
-  sendBuffer[1] = 0x81;
+  sendBuffer[0] = 0x06; // master mode, i2s mode, 16bit word length
+  sendBuffer[1] = 0x07;
   writeI2CData(sendBuffer, 2);
 
   // -------------------------
