@@ -218,7 +218,7 @@ void setupCS32L22(){
   sendBuffer[1] = 0x81;
   writeI2CData(sendBuffer, 2);
 
-  sendBuffer[0] = 0x06; // master mode, i2s mode, 16bit word length
+  sendBuffer[0] = 0x06; // slave mode, i2s mode, 16bit word length
   sendBuffer[1] = 0x07;
   writeI2CData(sendBuffer, 2);
 
