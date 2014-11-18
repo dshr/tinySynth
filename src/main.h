@@ -1,10 +1,6 @@
 #include "stm32f4xx_conf.h"
+#include "setup.h"
 
 void fillInBuffer();
-
-void setupClocks();
-void setupGPIO();
-void setupPLL();
-void setupI2S();
-void setupI2C();
-void setupCS32L22();
+float square(float phase);
+float sawtooth(float phase);

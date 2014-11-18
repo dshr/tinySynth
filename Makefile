@@ -1,6 +1,6 @@
 # put your *.o targets here, make should handle the rest!
 
-SRCS = main.c system_stm32f4xx.c
+SRCS = main.c setup.c system_stm32f4xx.c
 
 # all the files will be generated with this name (main.elf, main.bin, main.hex, etc)
 
@@ -13,7 +13,7 @@ PROJ_NAME=main
 CC=arm-none-eabi-gcc
 OBJCOPY=arm-none-eabi-objcopy
 
-CFLAGS  = -g -O1 -Wall -Tstm32_flash.ld
+CFLAGS  = -g -O0 -Wall -Tstm32_flash.ld
 CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m4 -mthumb-interwork
 CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 
