@@ -16,8 +16,11 @@ float sineWaveTable[512];
 
 int16_t audioBuffer[BUFFER_LENGTH];
 
-float phase;
+float osc1_phase;
 float osc1_note;
+
+float osc2_phase;
+float osc2_note;
 
 int main(){
   // enable the FPU
@@ -30,8 +33,12 @@ int main(){
   setupClocks();
   setupGPIO();
 
-  phase = 0.0f;
+  osc1_phase = 0.0f;
   osc1_note = 69.0f;
+
+  osc1_phase = 0.0f;
+  osc1_note = 76.0f;
+
   inverseSamplingFrequency = (float) FREQ_DIV / SAMPLING_FREQ;
 
   GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
@@ -70,12 +77,19 @@ int main(){
     }
     if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) != 0){
       osc1_note += 0.00005f;
-      if (osc1_note > 127.0f){
-        osc1_note = 127.0f;
+      if (osc1_note > 120.0f){
+        osc1_note = 120.0f;
       }
+      osc2_note += 0.00005f;
+      if (osc2_note > 127.0f){
+        osc2_note = 127.0f;
+      }
+      GPIO_SetBits(GPIOD, GPIO_Pin_15);
     }
     else {
       osc1_note = 69.0f;
+      osc2_note = 76.0f;
+      GPIO_ResetBits(GPIOD, GPIO_Pin_15);
     }
   }
   return 0;
@@ -88,16 +102,20 @@ void fillInBuffer() {
   for (i = 0; i < BUFFER_LENGTH; i++)
   {
     // generate sin
-    float sample = AMPLITUDE * sine(phase);
+    float sample = 0.5 * AMPLITUDE * (sawtooth(osc1_phase) + sawtooth(osc2_phase));
     audioBuffer[i] = (int16_t) sample;
 
-    phase += (float) 2 * PI *
-      getInterpolatedValue(osc1_note, mtof) * inverseSamplingFrequency;
-    if (phase >= (float) 2 * PI) //wrap around
-    {
-      phase -= (float) 2 * PI;
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
-    }
+    incrementPhase(&osc1_phase, osc1_note);
+    incrementPhase(&osc2_phase, osc2_note);
+  }
+}
+
+void incrementPhase(float* phase, float note){
+  *phase += (float) 2 * PI *
+      getInterpolatedValue(note, mtof) * inverseSamplingFrequency;
+  if (*phase > (float) 2 * PI) //wrap around
+  {
+    *phase -= (float) 2 * PI;
   }
 }
 
