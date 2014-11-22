@@ -10,7 +10,7 @@
 #define AMPLITUDE 32000
 #define A_FOUR 440.0
 
-float inverse_sampling_freq;
+float inverseSamplingFrequency;
 float mtof[128];
 
 int16_t audioBuffer[BUFFER_LENGTH];
@@ -31,7 +31,7 @@ int main(){
 
   phase = 0.0f;
   osc1_note = 69.0f;
-  inverse_sampling_freq = (float) FREQ_DIV / SAMPLING_FREQ;
+  inverseSamplingFrequency = (float) FREQ_DIV / SAMPLING_FREQ;
 
   GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
   fillInBuffer();
@@ -85,7 +85,7 @@ void fillInBuffer() {
     float sample = AMPLITUDE * sawtooth(phase);
     audioBuffer[i] = (int16_t) sample;
 
-    phase += (float) 2 * PI * mtof[(int)osc1_note] * inverse_sampling_freq;
+    phase += (float) 2 * PI * getInterpolatedValue(osc1_note, mtof) * inverseSamplingFrequency;
     if (phase > (float) 2 * PI) //wrap around
     {
       phase -= (float) 2 * PI;
@@ -104,4 +104,15 @@ float square(float phase){
 
 float sawtooth(float phase){
   return (float) phase/PI - 1;
+}
+
+float getInterpolatedValue(float value, float* array){
+  int roundedValue = (int)value;
+  float decimalPart = value - roundedValue;
+  if (decimalPart > 0.0f){
+    float diff = array[roundedValue + 1] - array[roundedValue];
+    return array[roundedValue] + (decimalPart * diff);
+  } else {
+    return array[roundedValue];
+  }
 }

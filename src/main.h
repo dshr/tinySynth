@@ -4,3 +4,5 @@
 void fillInBuffer();
 float square(float phase);
 float sawtooth(float phase);
+
+float getInterpolatedValue(float value, float* array);
