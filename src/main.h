@@ -2,6 +2,7 @@
 #include "setup.h"
 
 void fillInBuffer();
+float sine(float phase);
 float square(float phase);
 float sawtooth(float phase);
 

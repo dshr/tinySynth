@@ -12,6 +12,7 @@
 
 float inverseSamplingFrequency;
 float mtof[128];
+float sineWaveTable[512];
 
 int16_t audioBuffer[BUFFER_LENGTH];
 
@@ -51,6 +52,11 @@ int main(){
     mtof[i] = (float) mtof[i+1] / SEMITONE;
   }
 
+  // fill in the sine wavetable
+  for (i = 0; i < 512; i++){
+    sineWaveTable[i] = sinf(2 * PI * i/512);
+  }
+
   i = 0;
   while(1){
     while(!SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE));
@@ -82,16 +88,23 @@ void fillInBuffer() {
   for (i = 0; i < BUFFER_LENGTH; i++)
   {
     // generate sin
-    float sample = AMPLITUDE * sawtooth(phase);
+    float sample = AMPLITUDE * sine(phase);
     audioBuffer[i] = (int16_t) sample;
 
-    phase += (float) 2 * PI * getInterpolatedValue(osc1_note, mtof) * inverseSamplingFrequency;
-    if (phase > (float) 2 * PI) //wrap around
+    phase += (float) 2 * PI *
+      getInterpolatedValue(osc1_note, mtof) * inverseSamplingFrequency;
+    if (phase >= (float) 2 * PI) //wrap around
     {
       phase -= (float) 2 * PI;
       GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
     }
   }
+}
+
+float sine(float phase){
+  float wavetablePhase = 511 * phase/(2*PI); // the sineWaveTable goes from 0 to
+  // 511, so when phase == 2pi, we want it to be that and not 512.
+  return getInterpolatedValue(wavetablePhase, sineWaveTable);
 }
 
 float square(float phase){
