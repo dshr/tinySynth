@@ -2,7 +2,7 @@
 
 void setupClocks() {
   // enable GPIO ports A, B, C and D
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I^2S WS signal
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I2S WS signal
    RCC_AHB1Periph_GPIOB | // I2C_SDA & I2C_SCL
    RCC_AHB1Periph_GPIOC | // I2S_MCK, I2S_SCK, I2S_SD
    RCC_AHB1Periph_GPIOD, ENABLE); // reset pin on the DAC
@@ -12,7 +12,6 @@ void setupClocks() {
 }
 
 void setupPLL() {
-  RCC_PLLI2SCmd(DISABLE);
   RCC_I2SCLKConfig(RCC_I2S2CLKSource_PLLI2S);
   RCC_PLLI2SCmd(ENABLE);
   while(!RCC_GetFlagStatus(RCC_FLAG_PLLI2SRDY));
@@ -136,8 +135,8 @@ void setupCS32L22(){
   sendBuffer[1] = 0xAF;
   writeI2CData(sendBuffer, 2);
 
-  sendBuffer[0] = 0x05; // auto-detect clock, divide MCLK by 2
-  sendBuffer[1] = 0x81;
+  sendBuffer[0] = 0x05; // clock is 256*48k, don't divide MCLK by 2
+  sendBuffer[1] = 0x20;
   writeI2CData(sendBuffer, 2);
 
   sendBuffer[0] = 0x06; // master mode, i2s mode, 16bit word length

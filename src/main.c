@@ -3,16 +3,15 @@
 
 #define PI 3.14159265f
 #define SEMITONE 1.0594630943592953
-#define BUFFER_LENGTH 16
-#define FREQ_DIV 3
+#define BUFFER_LENGTH 4
 #define SAMPLING_FREQ 48000
 
-#define AMPLITUDE 32000
+#define AMPLITUDE 31000
 #define A_FOUR 440.0
 
 float inverseSamplingFrequency;
 float mtof[128];
-float sineWaveTable[512];
+float sineWaveTable[513];
 
 int16_t audioBuffer[BUFFER_LENGTH];
 
@@ -39,7 +38,7 @@ int main(){
   osc1_phase = 0.0f;
   osc1_note = 76.0f;
 
-  inverseSamplingFrequency = (float) FREQ_DIV / SAMPLING_FREQ;
+  inverseSamplingFrequency = (float) 1 / SAMPLING_FREQ;
 
   GPIO_ToggleBits(GPIOD, GPIO_Pin_12);
   fillInBuffer();
@@ -60,7 +59,7 @@ int main(){
   }
 
   // fill in the sine wavetable
-  for (i = 0; i < 512; i++){
+  for (i = 0; i < 513; i++){
     sineWaveTable[i] = sinf(2 * PI * i/512);
   }
 
@@ -84,7 +83,7 @@ int main(){
       if (osc2_note > 127.0f){
         osc2_note = 127.0f;
       }
-      GPIO_SetBits(GPIOD, GPIO_Pin_15);
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
     }
     else {
       osc1_note = 69.0f;
@@ -102,7 +101,7 @@ void fillInBuffer() {
   for (i = 0; i < BUFFER_LENGTH; i++)
   {
     // generate sin
-    float sample = 0.5 * AMPLITUDE * (sawtooth(osc1_phase) + sawtooth(osc2_phase));
+    float sample = 0.5 * AMPLITUDE * (sine(osc1_phase) + sine(osc2_phase));
     audioBuffer[i] = (int16_t) sample;
 
     incrementPhase(&osc1_phase, osc1_note);
@@ -120,8 +119,8 @@ void incrementPhase(float* phase, float note){
 }
 
 float sine(float phase){
-  float wavetablePhase = 511 * phase/(2*PI); // the sineWaveTable goes from 0 to
-  // 511, so when phase == 2pi, we want it to be that and not 512.
+  float wavetablePhase = 512 * phase/(2*PI); // the sineWaveTable goes from 0 to
+  // 511, so when phase == 2pi, we want it to be that and not 513.
   return getInterpolatedValue(wavetablePhase, sineWaveTable);
 }
 
