@@ -98,7 +98,7 @@ void fillInBuffer() {
 
   for (i = 0; i < BUFFER_LENGTH; i++)
   {
-    sample = 0.5 * AMPLITUDE * (sawtooth(osc1_phase) + sawtooth(osc2_phase));
+    sample = AMPLITUDE * sawtooth(osc1_phase, osc1_note);
 
     incrementPhase(&osc1_phase, osc1_note);
     incrementPhase(&osc2_phase, osc2_note);
@@ -107,31 +107,46 @@ void fillInBuffer() {
   }
 }
 
-inline void incrementPhase(float* phase, float note){
-  *phase += (float) 2 * PI *
-      getInterpolatedValue(note, mtof) * inverseSamplingFrequency;
-  if (*phase > (float) 2 * PI) //wrap around
-  {
-    *phase -= (float) 2 * PI;
+inline float polyBlep(float phase, float phaseIncrement){
+  if (phase < phaseIncrement) {
+      phase /= phaseIncrement;
+      return 2*phase - phase*phase - 1;
+  } else if (phase > 1.0 - phaseIncrement) {
+      phase = (phase - 1.0) / phaseIncrement;
+      return phase*phase + 2*phase + 1;
+  } else {
+    return 0.0;
   }
 }
 
-inline float sine(float phase){
-  float wavetablePhase = 512 * phase/(2*PI); // the sineWaveTable goes from 0 to
-  // 511, so when phase == 2pi, we want it to be that and not 513.
+inline float getPhaseIncrement(float note){
+  return getInterpolatedValue(note, mtof) * inverseSamplingFrequency;
+}
+
+inline void incrementPhase(float* phase, float note){
+  *phase += getPhaseIncrement(note);
+  if (*phase > 1.0f) //wrap around
+  {
+    *phase -= (float) 1.0f;
+  }
+}
+
+inline float sine(float phase, float note){
+  float wavetablePhase = 512 * phase; // the sineWaveTable goes from 0 to
+  // 511, so when phase == 1, we want it to be that and not 513.
   return getInterpolatedValue(wavetablePhase, sineWaveTable);
 }
 
-inline float square(float phase){
-  if (phase <= PI){
+inline float square(float phase, float note){
+  if (phase <= 0.5f){
     return 1.0f;
   } else {
     return -1.0f;
   }
 }
 
-inline float sawtooth(float phase){
-  return (float) phase/PI - 1;
+inline float sawtooth(float phase, float note){
+  return (float) 2 * phase - 1 - polyBlep(phase, getPhaseIncrement(note));
 }
 
 inline float getInterpolatedValue(float value, float* array){

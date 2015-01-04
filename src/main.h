@@ -3,8 +3,10 @@
 
 void fillInBuffer();
 void incrementPhase(float* phase, float note);
-float sine(float phase);
-float square(float phase);
-float sawtooth(float phase);
+float polyBlep(float phase, float phaseIncrement);
+float getPhaseIncrement(float note);
+float sine(float phase, float note);
+float square(float phase, float note);
+float sawtooth(float phase, float note);
 
 float getInterpolatedValue(float value, float* array);
