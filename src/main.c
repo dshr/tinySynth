@@ -1,5 +1,6 @@
 #include "main.h"
 #include <math.h>
+#include <malloc.h>
 
 #define PI 3.14159265f
 #define SEMITONE 1.0594630943592953
@@ -13,7 +14,11 @@ float inverseSamplingFrequency;
 float mtof[128];
 float sineWaveTable[513];
 
-int16_t audioBuffer[BUFFER_LENGTH];
+int16_t *currentBuffer;
+int16_t *offBuffer;
+
+int16_t buffer1[BUFFER_LENGTH];
+int16_t buffer2[BUFFER_LENGTH];
 
 float osc1_phase;
 float osc1_note;
@@ -21,19 +26,32 @@ float osc1_note;
 float osc2_phase;
 float osc2_note;
 
+float osc3_phase;
+float osc3_note;
+
+int currentBufferIndex;
+int offBufferIndex;
+
 int main(){
-  // do stuff
-  int16_t sample;
 
   setupPLL();
   setupClocks();
   setupGPIO();
 
-  osc1_phase = 0.0f;
-  osc1_note = 69.0f;
+  currentBuffer = &buffer1;
+  offBuffer = &buffer2;
+
+  currentBufferIndex = 0;
+  offBufferIndex = 0;
 
   osc1_phase = 0.0f;
-  osc1_note = 76.0f;
+  osc1_note = 57.0f;
+
+  osc2_phase = 0.0f;
+  osc2_note = 64.0f;
+
+  osc3_phase = 0.0f;
+  osc3_note = 68.0f;
 
   inverseSamplingFrequency = (float) 1 / SAMPLING_FREQ;
 
@@ -58,38 +76,48 @@ int main(){
 
   setupI2C();
   setupCS32L22();
+  setupIRC();
   setupI2S();
 
-  i = 0;
   while(1){
-    while(!SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE));
-    sample = audioBuffer[i/2];
-    SPI_I2S_SendData(SPI3, sample);
-    i++;
-    if (i == BUFFER_LENGTH*2){
+    if (currentBufferIndex == BUFFER_LENGTH*2){
       GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-      i = 0;
+      swapBuffers();
+      currentBufferIndex = 0;
+      offBufferIndex = 0;
+    }
+
+    if (offBufferIndex == 0) {
       fillInBuffer();
     }
+
     if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) != 0){
       osc1_note += 0.00005f;
-      if (osc1_note > 120.0f){
-        osc1_note = 120.0f;
+      if (osc1_note > 116.0f){
+        osc1_note = 116.0f;
       }
       osc2_note += 0.00005f;
-      if (osc2_note > 127.0f){
-        osc2_note = 127.0f;
+      if (osc2_note > 123.0f){
+        osc2_note = 123.0f;
+      }
+      osc3_note += 0.00005f;
+      if (osc3_note > 123.0f){
+        osc3_note = 123.0f;
       }
       GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
     }
     else {
       osc1_note -= 0.00005f;
-      if (osc1_note < 69.0f){
-        osc1_note = 69.0f;
+      if (osc1_note < 57.0f){
+        osc1_note = 57.0f;
       }
       osc2_note -= 0.00005f;
-      if (osc2_note < 76.0f){
-        osc2_note = 76.0f;
+      if (osc2_note < 64.0f){
+        osc2_note = 64.0f;
+      }
+      osc3_note -= 0.00005f;
+      if (osc3_note < 68.0f){
+        osc3_note = 68.0f;
       }
       GPIO_ResetBits(GPIOD, GPIO_Pin_15);
     }
@@ -97,12 +125,22 @@ int main(){
   return 0;
 }
 
+void SPI3_IRQHandler(void)
+{
+  if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE))
+  {
+    int16_t sample;
+    sample = currentBuffer[currentBufferIndex/2];
+    SPI_I2S_SendData(SPI3, sample);
+    currentBufferIndex++;
+  }
+}
+
 inline void fillInBuffer() {
-  int i;
   GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
   float sample, phaseIncrement;
 
-  for (i = 0; i < BUFFER_LENGTH; i++)
+  while (offBufferIndex < BUFFER_LENGTH)
   {
     sample = 0;
 
@@ -114,10 +152,21 @@ inline void fillInBuffer() {
     sample += sawtooth(osc2_phase, phaseIncrement);
     incrementPhase(&osc2_phase, phaseIncrement);
 
-    sample *= 0.5f * AMPLITUDE;
+    phaseIncrement = getPhaseIncrement(osc3_note);
+    sample += sawtooth(osc3_phase, phaseIncrement);
+    incrementPhase(&osc3_phase, phaseIncrement);
 
-    audioBuffer[i] = (int16_t) sample;
+    sample *= 0.3f * AMPLITUDE;
+
+    offBuffer[offBufferIndex] = (int16_t) sample;
+    offBufferIndex++;
   }
+}
+
+inline void swapBuffers() {
+  int16_t* temp = currentBuffer;
+  currentBuffer = offBuffer;
+  offBuffer = temp;
 }
 
 inline float polyBlep(float phase, float phaseIncrement){

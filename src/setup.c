@@ -172,3 +172,13 @@ void setupCS32L22(){
   sendBuffer[1] = 0x9E; // new settings
   writeI2CData(sendBuffer, 2);
 }
+
+void setupIRC() {
+  SPI_I2S_ITConfig(SPI3, SPI_I2S_IT_TXE, ENABLE);
+  NVIC_InitTypeDef NVIC_InitType;
+  NVIC_InitType.NVIC_IRQChannel = SPI3_IRQn;
+  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitType);
+}
