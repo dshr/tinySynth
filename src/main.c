@@ -1,6 +1,5 @@
 #include "main.h"
 #include <math.h>
-#include <malloc.h>
 
 #define PI 3.14159265f
 #define SEMITONE 1.0594630943592953
@@ -29,6 +28,9 @@ float osc2_note;
 float osc3_phase;
 float osc3_note;
 
+float lfo1_phase;
+float lfo1_frequency;
+
 int currentBufferIndex;
 int offBufferIndex;
 
@@ -53,6 +55,9 @@ int main(){
   osc3_phase = 0.0f;
   osc3_note = 68.0f;
 
+  lfo1_phase = 0.0f;
+  lfo1_frequency = 0.5f;
+
   inverseSamplingFrequency = (float) 1 / SAMPLING_FREQ;
 
   // fill in the midi note lookup table
@@ -67,7 +72,7 @@ int main(){
 
   // fill in the sine wavetable
   for (i = 0; i < 513; i++){
-    sineWaveTable[i] = sinf(2 * PI * i/512);
+    sineWaveTable[i] = cosf(2 * PI * i/512);
   }
 
   GPIO_SetBits(GPIOD, GPIO_Pin_12);
@@ -92,30 +97,30 @@ int main(){
     }
 
     if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) != 0){
-      osc1_note += 0.00005f;
+      osc1_note += 0.000005f;
       if (osc1_note > 116.0f){
         osc1_note = 116.0f;
       }
-      osc2_note += 0.00005f;
+      osc2_note += 0.000005f;
       if (osc2_note > 123.0f){
         osc2_note = 123.0f;
       }
-      osc3_note += 0.00005f;
+      osc3_note += 0.000005f;
       if (osc3_note > 123.0f){
         osc3_note = 123.0f;
       }
       GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
     }
     else {
-      osc1_note -= 0.00005f;
+      osc1_note -= 0.000005f;
       if (osc1_note < 57.0f){
         osc1_note = 57.0f;
       }
-      osc2_note -= 0.00005f;
+      osc2_note -= 0.000005f;
       if (osc2_note < 64.0f){
         osc2_note = 64.0f;
       }
-      osc3_note -= 0.00005f;
+      osc3_note -= 0.000005f;
       if (osc3_note < 68.0f){
         osc3_note = 68.0f;
       }
@@ -138,25 +143,30 @@ void SPI3_IRQHandler(void)
 
 inline void fillInBuffer() {
   GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-  float sample, phaseIncrement;
+  float sample, phaseIncrement, lfo1_value;
 
   while (offBufferIndex < BUFFER_LENGTH)
   {
     sample = 0;
 
-    phaseIncrement = getPhaseIncrement(osc1_note);
-    sample += sawtooth(osc1_phase, phaseIncrement);
+    // run LFO's
+    phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
+    lfo1_value = sine(lfo1_phase, phaseIncrement);
+    incrementPhase(&lfo1_phase, phaseIncrement);
+
+    phaseIncrement = getPhaseIncrementFromMIDI(osc1_note);
+    sample += square(osc1_phase, phaseIncrement, 0.5f * lfo1_value);
     incrementPhase(&osc1_phase, phaseIncrement);
 
-    phaseIncrement = getPhaseIncrement(osc2_note);
-    sample += sawtooth(osc2_phase, phaseIncrement);
-    incrementPhase(&osc2_phase, phaseIncrement);
+    // phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
+    // sample += square(osc2_phase, phaseIncrement);
+    // incrementPhase(&osc2_phase, phaseIncrement);
 
-    phaseIncrement = getPhaseIncrement(osc3_note);
-    sample += sawtooth(osc3_phase, phaseIncrement);
-    incrementPhase(&osc3_phase, phaseIncrement);
+    // phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
+    // sample += square(osc3_phase, phaseIncrement);
+    // incrementPhase(&osc3_phase, phaseIncrement);
 
-    sample *= 0.3f * AMPLITUDE;
+    sample *= AMPLITUDE;
 
     offBuffer[offBufferIndex] = (int16_t) sample;
     offBufferIndex++;
@@ -181,8 +191,12 @@ inline float polyBlep(float phase, float phaseIncrement){
   }
 }
 
-inline float getPhaseIncrement(float note){
+inline float getPhaseIncrementFromMIDI(float note){
   return getInterpolatedValue(note, mtof) * inverseSamplingFrequency;
+}
+
+inline float getPhaseIncrementFromFrequency(float frequency){
+  return frequency * inverseSamplingFrequency;
 }
 
 inline void incrementPhase(float* phase, float increment){
@@ -199,21 +213,27 @@ inline float sine(float phase, float phaseIncrement){
   return getInterpolatedValue(wavetablePhase, sineWaveTable);
 }
 
-inline float square(float phase, float phaseIncrement){
+inline float square(float phase, float phaseIncrement, float pulseWidthMod){
   float value = 0;
-  if (phase <= 0.5f){
+  if (pulseWidthMod > 0.99f) {
+    pulseWidthMod = 0.99f;
+  } else if (pulseWidthMod < -0.99f) {
+    pulseWidthMod = -0.99f;
+  }
+  float pulseWidth = 0.5 + 0.5 * pulseWidthMod;
+  if (phase <= pulseWidth){
     value = 1.0f;
   } else {
     value = -1.0f;
   }
-  value += polyBlep(phase, phaseIncrement);
-  incrementPhase(&phase, 0.5f);
-  value -= polyBlep(phase, phaseIncrement);
+  value += polyBlep(phase, phaseIncrement * (0.5/pulseWidth));
+  incrementPhase(&phase, pulseWidth);
+  value -= polyBlep(phase, phaseIncrement * (0.5/pulseWidth));
   return value;
 }
 
 inline float sawtooth(float phase, float phaseIncrement){
-  return (float) 2 * phase - 1 - polyBlep(phase, phaseIncrement);
+  return (float) 1 - 2 * phase + polyBlep(phase, phaseIncrement);
 }
 
 inline float getInterpolatedValue(float value, float* array){
