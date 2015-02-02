@@ -77,6 +77,7 @@ int main(){
 
   GPIO_SetBits(GPIOD, GPIO_Pin_12);
   fillInBuffer();
+  swapBuffers();
   GPIO_SetBits(GPIOD, GPIO_Pin_13);
 
   setupI2C();
@@ -85,13 +86,6 @@ int main(){
   setupI2S();
 
   while(1){
-    if (currentBufferIndex == BUFFER_LENGTH*2){
-      GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-      swapBuffers();
-      currentBufferIndex = 0;
-      offBufferIndex = 0;
-    }
-
     if (offBufferIndex == 0) {
       fillInBuffer();
     }
@@ -138,6 +132,10 @@ void SPI3_IRQHandler(void)
     sample = currentBuffer[currentBufferIndex/2];
     SPI_I2S_SendData(SPI3, sample);
     currentBufferIndex++;
+    if (currentBufferIndex == BUFFER_LENGTH*2){
+      GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
+      swapBuffers();
+    }
   }
 }
 
@@ -158,15 +156,15 @@ inline void fillInBuffer() {
     sample += square(osc1_phase, phaseIncrement, 0.5f * lfo1_value);
     incrementPhase(&osc1_phase, phaseIncrement);
 
-    // phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
-    // sample += square(osc2_phase, phaseIncrement);
-    // incrementPhase(&osc2_phase, phaseIncrement);
+    phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
+    sample += square(osc2_phase, phaseIncrement, 0.5f * lfo1_value);
+    incrementPhase(&osc2_phase, phaseIncrement);
 
-    // phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
-    // sample += square(osc3_phase, phaseIncrement);
-    // incrementPhase(&osc3_phase, phaseIncrement);
+    phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
+    sample += square(osc3_phase, phaseIncrement, 0.5f * lfo1_value);
+    incrementPhase(&osc3_phase, phaseIncrement);
 
-    sample *= AMPLITUDE;
+    sample *= 0.3 * AMPLITUDE;
 
     offBuffer[offBufferIndex] = (int16_t) sample;
     offBufferIndex++;
@@ -177,17 +175,19 @@ inline void swapBuffers() {
   int16_t* temp = currentBuffer;
   currentBuffer = offBuffer;
   offBuffer = temp;
+  currentBufferIndex = 0;
+  offBufferIndex = 0;
 }
 
 inline float polyBlep(float phase, float phaseIncrement){
   if (phase < phaseIncrement) {
       phase /= phaseIncrement;
       return phase+phase - phase*phase - 1;
-  } else if (phase > 1.0 - phaseIncrement) {
-      phase = (phase - 1.0) / phaseIncrement;
+  } else if (phase > 1.0f - phaseIncrement) {
+      phase = (phase - 1.0f) / phaseIncrement;
       return phase*phase + phase+phase + 1;
   } else {
-    return 0.0;
+    return 0.0f;
   }
 }
 
@@ -220,15 +220,15 @@ inline float square(float phase, float phaseIncrement, float pulseWidthMod){
   } else if (pulseWidthMod < -0.99f) {
     pulseWidthMod = -0.99f;
   }
-  float pulseWidth = 0.5 + 0.5 * pulseWidthMod;
+  float pulseWidth = 0.5f + 0.5f * pulseWidthMod;
   if (phase <= pulseWidth){
     value = 1.0f;
   } else {
     value = -1.0f;
   }
-  value += polyBlep(phase, phaseIncrement * (0.5/pulseWidth));
-  incrementPhase(&phase, pulseWidth);
-  value -= polyBlep(phase, phaseIncrement * (0.5/pulseWidth));
+  value += polyBlep(phase, phaseIncrement);
+  incrementPhase(&phase, 1-pulseWidth);
+  value -= polyBlep(phase, phaseIncrement);
   return value;
 }
 
