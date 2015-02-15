@@ -1,5 +1,7 @@
 #include "stm32f4xx_conf.h"
 #include "setup.h"
+#include "adsr.h"
+#include <math.h>
 
 void fillInBuffer();
 void incrementPhase(float* phase, float increment);
