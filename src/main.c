@@ -86,6 +86,7 @@ int main(){
 	setupCS32L22();
 	setupIRC();
 	setupI2S();
+	setupUSART();
 
 	initADSR(&adsr1, 1000, 50000, 0.3, 60000);
 	adsr1_on = 0;
@@ -120,6 +121,14 @@ void SPI3_IRQHandler()
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
 			swapBuffers();
 		}
+	}
+}
+
+void USART2_IRQHandler()
+{
+	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
+	{
+		GPIO_SetBits(GPIOD, GPIO_Pin_15);
 	}
 }
 

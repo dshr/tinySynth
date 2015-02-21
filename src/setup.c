@@ -2,13 +2,13 @@
 
 void setupClocks() {
   // enable GPIO ports A, B, C and D
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I2S WS signal
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I2S WS signal and USART
    RCC_AHB1Periph_GPIOB | // I2C_SDA & I2C_SCL
    RCC_AHB1Periph_GPIOC | // I2S_MCK, I2S_SCK, I2S_SD
    RCC_AHB1Periph_GPIOD, ENABLE); // reset pin on the DAC
 
   // enable the serial peripherals
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3, ENABLE);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3 | RCC_APB1Periph_USART2, ENABLE);
 }
 
 void setupPLL() {
@@ -62,6 +62,16 @@ void setupGPIO() {
   GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
   GPIO_Init(GPIOA, &GPIO_initStruct);
 
+  // USART
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_3;
+  GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_initStruct.GPIO_OType = GPIO_OType_OD;
+  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOA, &GPIO_initStruct);
+
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_USART2);
+
   // reset the cs43L22
   GPIO_ResetBits(GPIOD, GPIO_Pin_4);
 }
@@ -92,6 +102,35 @@ void setupI2C() {
   I2C_InitType.I2C_DutyCycle = I2C_DutyCycle_2;
   I2C_Init(I2C1, &I2C_InitType);
   I2C_Cmd(I2C1, ENABLE);
+}
+
+void setupUSART() {
+  USART_InitTypeDef USART_InitType;
+  USART_InitType.USART_BaudRate = 31250;
+  USART_InitType.USART_WordLength = USART_WordLength_8b;
+  USART_InitType.USART_StopBits = USART_StopBits_1;
+  USART_InitType.USART_Parity = USART_Parity_No;
+  USART_InitType.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitType.USART_Mode = USART_Mode_Rx;
+  USART_Init(USART2, &USART_InitType);
+  USART_Cmd(USART2, ENABLE);
+}
+
+void setupIRC() {
+  SPI_I2S_ITConfig(SPI3, SPI_I2S_IT_TXE, ENABLE);
+  NVIC_InitTypeDef NVIC_InitType;
+  NVIC_InitType.NVIC_IRQChannel = SPI3_IRQn;
+  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitType);
+
+  USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+  NVIC_InitType.NVIC_IRQChannel = USART2_IRQn;
+  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 7;
+  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitType);
 }
 
 void writeI2CData(uint8_t bytesToSend[], uint8_t numOfBytesToSend){
@@ -171,14 +210,4 @@ void setupCS32L22(){
   sendBuffer[0] = 0x02; // this tells the board to not take any
   sendBuffer[1] = 0x9E; // new settings
   writeI2CData(sendBuffer, 2);
-}
-
-void setupIRC() {
-  SPI_I2S_ITConfig(SPI3, SPI_I2S_IT_TXE, ENABLE);
-  NVIC_InitTypeDef NVIC_InitType;
-  NVIC_InitType.NVIC_IRQChannel = SPI3_IRQn;
-  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
-  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitType);
 }

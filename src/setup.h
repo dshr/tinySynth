@@ -5,5 +5,6 @@ void setupGPIO();
 void setupPLL();
 void setupI2S();
 void setupI2C();
-void setupCS32L22();
+void setupUSART();
 void setupIRC();
+void setupCS32L22();
