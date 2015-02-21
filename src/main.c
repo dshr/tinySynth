@@ -87,8 +87,9 @@ int main(){
 	setupIRC();
 	setupI2S();
 
-	initADSR(&adsr1, 2000, 50000, 0.0, 300000);
+	initADSR(&adsr1, 1000, 50000, 0.3, 60000);
 	adsr1_on = 0;
+	setADSROff(&adsr1, &adsr1_on);
 
 	while(1){
 		if (offBufferIndex == 0) {
