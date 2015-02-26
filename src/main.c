@@ -29,6 +29,7 @@ float osc3_note;
 
 float lfo1_phase;
 float lfo1_frequency;
+float lfo1_depth;
 
 struct ADSR adsr1;
 int adsr1_on;
@@ -58,7 +59,8 @@ int main(){
 	osc3_note = 68.0f;
 
 	lfo1_phase = 0.0f;
-	lfo1_frequency = 0.5f;
+	lfo1_frequency = 2.0f;
+	lfo1_depth = 0.0f;
 
 	samplingPeriod = (float) 1 / SAMPLING_FREQ;
 
@@ -82,12 +84,13 @@ int main(){
 	swapBuffers();
 	GPIO_SetBits(GPIOD, GPIO_Pin_13);
 
+	setupADC();
 	setupI2C();
 	setupCS32L22();
 	setupIRC();
 	setupI2S();
 
-	initADSR(&adsr1, 1000, 50000, 0.3, 60000);
+	initADSR(&adsr1, 1000, 1000, 0.8, 60000);
 	adsr1_on = 0;
 	setADSROff(&adsr1, &adsr1_on);
 
@@ -96,13 +99,15 @@ int main(){
 			fillInBuffer();
 		}
 
-		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) != 0){
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
-		}
-		else {
+		lfo1_depth = (float) getADCValue() / 4096.0;
+
+		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == 0){
 			setADSROff(&adsr1, &adsr1_on);
 			GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+		}
+		else {
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
 		}
 	}
 	return 0;
@@ -136,16 +141,19 @@ inline void fillInBuffer() {
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note);
-		sample += square(osc1_phase, phaseIncrement, 0.5f * lfo1_value);
+		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note + (6 * lfo1_depth * lfo1_value));
+		sample += sawtooth(osc1_phase, phaseIncrement);
+		// sample += square(osc1_phase, phaseIncrement, lfo1_depth * lfo1_value);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
-		sample += square(osc2_phase, phaseIncrement, 0.5f * lfo1_value);
+		phaseIncrement = getPhaseIncrementFromMIDI(osc2_note + (6 * lfo1_depth * lfo1_value));
+		sample += sawtooth(osc2_phase, phaseIncrement);
+		// sample += square(osc2_phase, phaseIncrement, lfo1_depth * lfo1_value);
 		incrementPhase(&osc2_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
-		sample += square(osc3_phase, phaseIncrement, 0.5f * lfo1_value);
+		phaseIncrement = getPhaseIncrementFromMIDI(osc3_note + (6 * lfo1_depth * lfo1_value));
+		sample += sawtooth(osc3_phase, phaseIncrement);
+		// sample += square(osc3_phase, phaseIncrement, lfo1_depth * lfo1_value);
 		incrementPhase(&osc3_phase, phaseIncrement);
 
 		sample *= 0.3 * AMPLITUDE * getADSRLevel(&adsr1);
@@ -231,4 +239,10 @@ inline float getInterpolatedValue(float value, float* array){
 	} else {
 		return array[roundedValue];
 	}
+}
+
+inline int getADCValue(){
+	ADC_SoftwareStartConv(ADC1);
+	while(ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
+	return ADC_GetConversionValue(ADC1);
 }

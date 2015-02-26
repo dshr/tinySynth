@@ -9,6 +9,9 @@ void setupClocks() {
 
   // enable the serial peripherals
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3, ENABLE);
+
+  // enable the ADC
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
 }
 
 void setupPLL() {
@@ -62,6 +65,12 @@ void setupGPIO() {
   GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
   GPIO_Init(GPIOA, &GPIO_initStruct);
 
+  // ADC
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_1;
+  GPIO_initStruct.GPIO_Mode = GPIO_Mode_AN;
+  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
+  GPIO_Init(GPIOC, &GPIO_initStruct);
+
   // reset the cs43L22
   GPIO_ResetBits(GPIOD, GPIO_Pin_4);
 }
@@ -92,6 +101,29 @@ void setupI2C() {
   I2C_InitType.I2C_DutyCycle = I2C_DutyCycle_2;
   I2C_Init(I2C1, &I2C_InitType);
   I2C_Cmd(I2C1, ENABLE);
+}
+
+void setupADC() {
+  ADC_CommonInitTypeDef ADC_CommonInitType;
+  ADC_CommonStructInit(&ADC_CommonInitType);
+  ADC_CommonInitType.ADC_Mode = ADC_Mode_Independent;
+  ADC_CommonInitType.ADC_Prescaler = ADC_Prescaler_Div2;
+  ADC_CommonInitType.ADC_DMAAccessMode = ADC_DMAAccessMode_Disabled;
+  ADC_CommonInitType.ADC_TwoSamplingDelay = ADC_TwoSamplingDelay_5Cycles;
+  ADC_CommonInit(&ADC_CommonInitType);
+
+  ADC_InitTypeDef ADC_InitType;
+  ADC_StructInit(&ADC_InitType);
+  ADC_InitType.ADC_Resolution = ADC_Resolution_12b;
+  ADC_InitType.ADC_ScanConvMode = DISABLE;
+  ADC_InitType.ADC_ContinuousConvMode = DISABLE;
+  ADC_InitType.ADC_ExternalTrigConvEdge = 0;
+  ADC_InitType.ADC_ExternalTrigConv = 0;
+  ADC_InitType.ADC_DataAlign = ADC_DataAlign_Right;
+  ADC_InitType.ADC_NbrOfConversion = 1;
+  ADC_Init(ADC1, &ADC_InitType);
+  ADC_Cmd(ADC1, ENABLE);
+  ADC_RegularChannelConfig(ADC1, ADC_Channel_11, 1, ADC_SampleTime_144Cycles);
 }
 
 void writeI2CData(uint8_t bytesToSend[], uint8_t numOfBytesToSend){

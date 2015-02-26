@@ -13,3 +13,4 @@ float sine(float phase, float phaseIncrement);
 float square(float phase, float phaseIncrement, float pulseWidthMod);
 float sawtooth(float phase, float phaseIncrement);
 float getInterpolatedValue(float value, float* array);
+int getADCValue();
