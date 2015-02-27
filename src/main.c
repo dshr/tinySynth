@@ -36,6 +36,9 @@ int adsr1_on;
 int currentBufferIndex;
 int offBufferIndex;
 
+int messageCounter;
+int midiMessage[3];
+
 int main(){
 
 	setupPLL();
@@ -48,14 +51,16 @@ int main(){
 	currentBufferIndex = 0;
 	offBufferIndex = 0;
 
+	messageCounter = 0;
+
 	osc1_phase = 0.0f;
-	osc1_note = 57.0f;
+	// osc1_note = 57.0f;
 
-	osc2_phase = 0.0f;
-	osc2_note = 64.0f;
+	// osc2_phase = 0.0f;
+	// osc2_note = 64.0f;
 
-	osc3_phase = 0.0f;
-	osc3_note = 68.0f;
+	// osc3_phase = 0.0f;
+	// osc3_note = 68.0f;
 
 	lfo1_phase = 0.0f;
 	lfo1_frequency = 0.5f;
@@ -80,7 +85,6 @@ int main(){
 	GPIO_SetBits(GPIOD, GPIO_Pin_12);
 	fillInBuffer();
 	swapBuffers();
-	GPIO_SetBits(GPIOD, GPIO_Pin_13);
 
 	setupI2C();
 	setupCS32L22();
@@ -88,7 +92,7 @@ int main(){
 	setupI2S();
 	setupUSART();
 
-	initADSR(&adsr1, 1000, 50000, 0.3, 60000);
+	initADSR(&adsr1, 1000, 50000, 0.8, 60000);
 	adsr1_on = 0;
 	setADSROff(&adsr1, &adsr1_on);
 
@@ -97,14 +101,7 @@ int main(){
 			fillInBuffer();
 		}
 
-		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) != 0){
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
-		}
-		else {
-			setADSROff(&adsr1, &adsr1_on);
-			GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-		}
+		GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
 	}
 	return 0;
 }
@@ -128,7 +125,26 @@ void USART2_IRQHandler()
 {
 	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
 	{
-		GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		int message = USART_ReceiveData(USART2);
+		if (message > 127 && message < 160 && messageCounter == 0) {
+			midiMessage[messageCounter] = message;
+			messageCounter++;
+		} else if (messageCounter > 0) {
+			midiMessage[messageCounter] = message;
+			messageCounter++;
+		}
+		if (messageCounter > 2) {
+			if (midiMessage[0] > 143) {
+				osc1_note = midiMessage[1];
+				setADSROn(&adsr1, &adsr1_on);
+				GPIO_SetBits(GPIOD, GPIO_Pin_15);
+			} else if (midiMessage[0] < 144 && osc1_note == midiMessage[1]) {
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+			messageCounter = 0;
+			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
+		}
 	}
 }
 
@@ -149,15 +165,15 @@ inline void fillInBuffer() {
 		sample += square(osc1_phase, phaseIncrement, 0.5f * lfo1_value);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
-		sample += square(osc2_phase, phaseIncrement, 0.5f * lfo1_value);
-		incrementPhase(&osc2_phase, phaseIncrement);
+		// phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
+		// sample += square(osc2_phase, phaseIncrement, 0.5f * lfo1_value);
+		// incrementPhase(&osc2_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
-		sample += square(osc3_phase, phaseIncrement, 0.5f * lfo1_value);
-		incrementPhase(&osc3_phase, phaseIncrement);
+		// phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
+		// sample += square(osc3_phase, phaseIncrement, 0.5f * lfo1_value);
+		// incrementPhase(&osc3_phase, phaseIncrement);
 
-		sample *= 0.3 * AMPLITUDE * getADSRLevel(&adsr1);
+		sample *= AMPLITUDE * getADSRLevel(&adsr1);
 
 		runADSR(&adsr1, &adsr1_on);
 
