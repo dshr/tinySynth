@@ -6,7 +6,7 @@
 #define SAMPLING_FREQ 48000
 
 #define AMPLITUDE 32000
-#define A_FOUR 440.0f
+#define A_FOUR 440.0000000000000000f
 
 float samplingPeriod;
 float mtof[128];
@@ -32,6 +32,9 @@ float lfo1_frequency;
 
 struct ADSR adsr1;
 int adsr1_on;
+float level;
+float pulseWidthModAmount;
+float vibratoAmount;
 
 int currentBufferIndex;
 int offBufferIndex;
@@ -54,13 +57,7 @@ int main(){
 	messageCounter = 0;
 
 	osc1_phase = 0.0f;
-	// osc1_note = 57.0f;
-
-	// osc2_phase = 0.0f;
-	// osc2_note = 64.0f;
-
-	// osc3_phase = 0.0f;
-	// osc3_note = 68.0f;
+	osc2_phase = 0.0f;
 
 	lfo1_phase = 0.0f;
 	lfo1_frequency = 0.5f;
@@ -71,10 +68,10 @@ int main(){
 	int i;
 	mtof[69] = A_FOUR;
 	for (i = 70; i < 128; i++){
-		mtof[i] = (float) SEMITONE * mtof[i-1];
+		mtof[i] = SEMITONE * mtof[i-1];
 	}
 	for (i = 68; i >= 0; i--){
-		mtof[i] = (float) mtof[i+1] / SEMITONE;
+		mtof[i] = mtof[i+1] / SEMITONE;
 	}
 
 	// fill in the sine wavetable
@@ -95,12 +92,51 @@ int main(){
 	initADSR(&adsr1, 1000, 50000, 0.8, 60000);
 	adsr1_on = 0;
 	setADSROff(&adsr1, &adsr1_on);
+	level = 0.1;
 
 	while(1){
 		if (offBufferIndex == 0) {
 			fillInBuffer();
 		}
-
+		if (messageCounter > 2) {
+			if (midiMessage[0] > 175) {
+				switch (midiMessage[1]){
+					case 67:
+						setAttack(&adsr1, midiMessage[2]*10000);
+						break;
+					case 68:
+						setDecay(&adsr1, midiMessage[2]*10000);
+						break;
+					case 69:
+						setSustain(&adsr1, (float) midiMessage[2] / 127);
+						break;
+					case 70:
+						setRelease(&adsr1, midiMessage[2]*10000);
+						break;
+					case 75:
+						pulseWidthModAmount = (float) midiMessage[2] / 127;
+						break;
+					case 76:
+						vibratoAmount = (float) midiMessage[2] / 127;
+						break;
+					case 77:
+						lfo1_frequency = (float) midiMessage[2] / 12;
+						break;
+					case 78:
+						level = (float) midiMessage[2] / 127;
+						break;
+					default: break;
+				}
+			} else if (midiMessage[0] > 143) {
+				osc1_note = midiMessage[1];
+				setADSROn(&adsr1, &adsr1_on);
+				GPIO_SetBits(GPIOD, GPIO_Pin_15);
+			} else if (midiMessage[0] < 144 && osc1_note == midiMessage[1]) {
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
+		}
 		GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
 	}
 	return 0;
@@ -125,25 +161,16 @@ void USART2_IRQHandler()
 {
 	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
 	{
+		if (messageCounter > 2)	messageCounter = 0;
 		int message = USART_ReceiveData(USART2);
-		if (message > 127 && message < 160 && messageCounter == 0) {
+		if (messageCounter == 0 &&
+				((message > 127 && message < 160) ||
+				 (message > 175 && message < 192))) {
 			midiMessage[messageCounter] = message;
 			messageCounter++;
 		} else if (messageCounter > 0) {
 			midiMessage[messageCounter] = message;
 			messageCounter++;
-		}
-		if (messageCounter > 2) {
-			if (midiMessage[0] > 143) {
-				osc1_note = midiMessage[1];
-				setADSROn(&adsr1, &adsr1_on);
-				GPIO_SetBits(GPIOD, GPIO_Pin_15);
-			} else if (midiMessage[0] < 144 && osc1_note == midiMessage[1]) {
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-			messageCounter = 0;
-			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
 		}
 	}
 }
@@ -161,19 +188,15 @@ inline void fillInBuffer() {
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note);
-		sample += square(osc1_phase, phaseIncrement, 0.5f * lfo1_value);
+		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note + (vibratoAmount * lfo1_value));
+		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		// phaseIncrement = getPhaseIncrementFromMIDI(osc2_note);
-		// sample += square(osc2_phase, phaseIncrement, 0.5f * lfo1_value);
-		// incrementPhase(&osc2_phase, phaseIncrement);
+		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note - 12  + (vibratoAmount * lfo1_value));
+		sample += sine(osc2_phase, phaseIncrement);
+		incrementPhase(&osc2_phase, phaseIncrement);
 
-		// phaseIncrement = getPhaseIncrementFromMIDI(osc3_note);
-		// sample += square(osc3_phase, phaseIncrement, 0.5f * lfo1_value);
-		// incrementPhase(&osc3_phase, phaseIncrement);
-
-		sample *= AMPLITUDE * getADSRLevel(&adsr1);
+		sample *= 0.5 * level * AMPLITUDE * getADSRLevel(&adsr1);
 
 		runADSR(&adsr1, &adsr1_on);
 

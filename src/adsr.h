@@ -15,3 +15,7 @@ void setADSROn(struct ADSR* adsr, int* on);
 void setADSROff(struct ADSR* adsr, int* on);
 void runADSR(struct ADSR* adsr, int* on);
 float getADSRLevel(struct ADSR* adsr);
+void setAttack(struct ADSR* adsr, unsigned a);
+void setDecay(struct ADSR* adsr, unsigned d);
+void setSustain(struct ADSR* adsr, float s);
+void setRelease(struct ADSR* adsr, unsigned r);

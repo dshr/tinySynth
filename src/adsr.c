@@ -10,6 +10,20 @@ void initADSR(struct ADSR* adsr, unsigned a, unsigned d, float s, unsigned r){
 	adsr->offLevel = 0;
 }
 
+void setAttack(struct ADSR* adsr, unsigned a){
+	adsr->attackTime = a;
+}
+void setDecay(struct ADSR* adsr, unsigned d){
+	adsr->decayTime = d;
+}
+void setSustain(struct ADSR* adsr, float s){
+	if (s > 1) s = 1;
+	adsr->sustainLevel = s;
+}
+void setRelease(struct ADSR* adsr, unsigned r){
+	adsr->releaseTime = r;
+}
+
 void setADSROn(struct ADSR* adsr, int* on){
 	if (!*on) {
 		adsr->index = 0;
