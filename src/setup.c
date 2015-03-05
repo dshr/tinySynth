@@ -58,10 +58,10 @@ void setupGPIO() {
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource4, GPIO_AF_SPI3);
 
   // user button
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_0;
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_2;
   GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN;
   GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
-  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
+  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
   GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
   GPIO_Init(GPIOA, &GPIO_initStruct);
 

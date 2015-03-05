@@ -99,13 +99,13 @@ int main(){
 			fillInBuffer();
 		}
 
-		lfo1_depth = (float) getADCValue() / 4096.0;
+		lfo1_depth = 0;//(float) getADCValue() / 4096.0;
 
-		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == 0){
+		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == 0){
 			setADSROff(&adsr1, &adsr1_on);
 			GPIO_ResetBits(GPIOD, GPIO_Pin_15);
 		}
-		else {
+		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == 1){
 			setADSROn(&adsr1, &adsr1_on);
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
 		}
