@@ -5,7 +5,8 @@ void setupClocks() {
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I2S WS signal
    RCC_AHB1Periph_GPIOB | // I2C_SDA & I2C_SCL
    RCC_AHB1Periph_GPIOC | // I2S_MCK, I2S_SCK, I2S_SD
-   RCC_AHB1Periph_GPIOD, ENABLE); // reset pin on the DAC
+   RCC_AHB1Periph_GPIOD |
+   RCC_AHB1Periph_GPIOE, ENABLE); // reset pin on the DAC
 
   // enable the serial peripherals
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3, ENABLE);
@@ -57,13 +58,24 @@ void setupGPIO() {
 
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource4, GPIO_AF_SPI3);
 
-  // user button
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_2;
+  // user buttons
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_7 | GPIO_Pin_8 |
+                             GPIO_Pin_9 | GPIO_Pin_10 |
+                             GPIO_Pin_11 | GPIO_Pin_12 |
+                             GPIO_Pin_13 | GPIO_Pin_14 |
+                             GPIO_Pin_15 ;
   GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN;
   GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
   GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
   GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_Init(GPIOA, &GPIO_initStruct);
+  GPIO_Init(GPIOE, &GPIO_initStruct);
+
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_11;
+  GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN;
+  GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
+  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
+  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOB, &GPIO_initStruct);
 
   // ADC
   GPIO_initStruct.GPIO_Pin = GPIO_Pin_1;

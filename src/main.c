@@ -50,13 +50,10 @@ int main(){
 	offBufferIndex = 0;
 
 	osc1_phase = 0.0f;
-	osc1_note = 57.0f;
 
 	osc2_phase = 0.0f;
-	osc2_note = 64.0f;
 
 	osc3_phase = 0.0f;
-	osc3_note = 68.0f;
 
 	lfo1_phase = 0.0f;
 	lfo1_frequency = 2.0f;
@@ -101,13 +98,126 @@ int main(){
 
 		lfo1_depth = 0;//(float) getADCValue() / 4096.0;
 
-		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == 0){
-			setADSROff(&adsr1, &adsr1_on);
-			GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == 1){
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_7) == 1){
+			osc1_note = 60;
 			setADSROn(&adsr1, &adsr1_on);
-			GPIO_ToggleBits(GPIOD, GPIO_Pin_15);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_7) == 0){
+			if (osc1_note == 60){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_8) == 1){
+			osc1_note = 61;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_8) == 0){
+			if (osc1_note == 61){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_9) == 1){
+			osc1_note = 62;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_9) == 0){
+			if (osc1_note == 62){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_10) == 1){
+			osc1_note = 63;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_10) == 0){
+			if (osc1_note == 63){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_11) == 1){
+			osc1_note = 64;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_11) == 0){
+			if (osc1_note == 64){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_12) == 1){
+			osc1_note = 65;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_12) == 0){
+			if (osc1_note == 65){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_13) == 1){
+			osc1_note = 66;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_13) == 0){
+			if (osc1_note == 66){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_14) == 1){
+			osc1_note = 67;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_14) == 0){
+			if (osc1_note == 67){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_15) == 1){
+			osc1_note = 68;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_15) == 0){
+			if (osc1_note == 68){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_10) == 1){
+			osc1_note = 69;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_10) == 0){
+			if (osc1_note == 69){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
+		}
+		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_11) == 1){
+			osc1_note = 70;
+			setADSROn(&adsr1, &adsr1_on);
+			GPIO_SetBits(GPIOD, GPIO_Pin_15);
+		}
+		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_11) == 0){
+			if (osc1_note == 70){
+				setADSROff(&adsr1, &adsr1_on);
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+			}
 		}
 	}
 	return 0;
@@ -146,13 +256,13 @@ inline void fillInBuffer() {
 		// sample += square(osc1_phase, phaseIncrement, lfo1_depth * lfo1_value);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc2_note + (6 * lfo1_depth * lfo1_value));
-		sample += sawtooth(osc2_phase, phaseIncrement);
+		// phaseIncrement = getPhaseIncrementFromMIDI(osc2_note + (6 * lfo1_depth * lfo1_value));
+		// sample += sawtooth(osc2_phase, phaseIncrement);
 		// sample += square(osc2_phase, phaseIncrement, lfo1_depth * lfo1_value);
-		incrementPhase(&osc2_phase, phaseIncrement);
+		// incrementPhase(&osc2_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc3_note + (6 * lfo1_depth * lfo1_value));
-		sample += sawtooth(osc3_phase, phaseIncrement);
+		// phaseIncrement = getPhaseIncrementFromMIDI(osc3_note + (6 * lfo1_depth * lfo1_value));
+		// sample += sawtooth(osc3_phase, phaseIncrement);
 		// sample += square(osc3_phase, phaseIncrement, lfo1_depth * lfo1_value);
 		incrementPhase(&osc3_phase, phaseIncrement);
 
