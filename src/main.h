@@ -1,6 +1,7 @@
 #include "stm32f4xx_conf.h"
 #include "setup.h"
 #include "adsr.h"
+#include "filter.h"
 #include <math.h>
 
 void fillInBuffer();

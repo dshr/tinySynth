@@ -1,22 +1,14 @@
 #include "main.h"
 
-#define PI 3.14159265f
-#define SEMITONE 1.0594630943592953
-#define BUFFER_LENGTH 2
-#define SAMPLING_FREQ 48000
-
-#define AMPLITUDE 32000
-#define A_FOUR 440.0000000000000000f
-
 float samplingPeriod;
 float mtof[128];
 float sineWaveTable[513];
 
-int16_t *currentBuffer;
-int16_t *offBuffer;
+float *currentBuffer;
+float *offBuffer;
 
-int16_t buffer1[BUFFER_LENGTH];
-int16_t buffer2[BUFFER_LENGTH];
+float buffer1[BUFFER_LENGTH];
+float buffer2[BUFFER_LENGTH];
 
 float osc1_phase;
 float osc1_note;
@@ -31,6 +23,7 @@ float lfo1_phase;
 float lfo1_frequency;
 
 struct ADSR adsr1;
+struct Filter filter;
 int adsr1_on;
 float level;
 float pulseWidthModAmount;
@@ -48,8 +41,8 @@ int main(){
 	setupClocks();
 	setupGPIO();
 
-	currentBuffer = &buffer1;
-	offBuffer = &buffer2;
+	currentBuffer = buffer1;
+	offBuffer = buffer2;
 
 	currentBufferIndex = 0;
 	offBufferIndex = 0;
@@ -90,6 +83,7 @@ int main(){
 	setupUSART();
 
 	initADSR(&adsr1, 1000, 50000, 0.8, 60000);
+	initFilter(&filter, 2000.0f, 3.0f, 4.0f);
 	adsr1_on = 0;
 	setADSROff(&adsr1, &adsr1_on);
 	level = 0.1;
@@ -108,22 +102,31 @@ int main(){
 						setDecay(&adsr1, midiMessage[2]*10000);
 						break;
 					case 69:
-						setSustain(&adsr1, (float) midiMessage[2] / 127);
+						setSustain(&adsr1, (float)midiMessage[2] / 127.0f);
 						break;
 					case 70:
 						setRelease(&adsr1, midiMessage[2]*10000);
 						break;
+					case 72:
+						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
+						break;
+					case 73:
+						setFrequency(&filter,((float)midiMessage[2] / 127.0f) * 12000.f);
+						break;
+					case 74:
+						setResonance(&filter,((float)midiMessage[2] / 127.0f) * 4.0f);
+						break;
 					case 75:
-						pulseWidthModAmount = (float) midiMessage[2] / 127;
+						pulseWidthModAmount = (float)midiMessage[2] / 127.0f;
 						break;
 					case 76:
-						vibratoAmount = (float) midiMessage[2] / 127;
+						vibratoAmount = (float)midiMessage[2] / 127.0f;
 						break;
 					case 77:
-						lfo1_frequency = (float) midiMessage[2] / 12;
+						lfo1_frequency = (float)midiMessage[2] / 12.0f;
 						break;
 					case 78:
-						level = (float) midiMessage[2] / 127;
+						level = (float)midiMessage[2] / 127.0f;
 						break;
 					default: break;
 				}
@@ -147,7 +150,7 @@ void SPI3_IRQHandler()
 	if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE))
 	{
 		int16_t sample;
-		sample = currentBuffer[currentBufferIndex/2];
+		sample = (int16_t) currentBuffer[currentBufferIndex/2];
 		SPI_I2S_SendData(SPI3, sample);
 		currentBufferIndex++;
 		if (currentBufferIndex == BUFFER_LENGTH*2){
@@ -188,25 +191,30 @@ inline void fillInBuffer() {
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note + (vibratoAmount * lfo1_value));
+		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note + (vibratoAmount * lfo1_value) + 0.41f);
 		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note - 12  + (vibratoAmount * lfo1_value));
-		sample += sine(osc2_phase, phaseIncrement);
+		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note  + (vibratoAmount * lfo1_value) + 0.41f);
+		sample += sawtooth(osc2_phase, phaseIncrement);
 		incrementPhase(&osc2_phase, phaseIncrement);
 
-		sample *= 0.5 * level * AMPLITUDE * getADSRLevel(&adsr1);
+		sample *= level * getADSRLevel(&adsr1);
 
 		runADSR(&adsr1, &adsr1_on);
 
-		offBuffer[offBufferIndex] = (int16_t) sample;
+		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;
+	}
+	filterSamples(&filter, offBuffer);
+	int i;
+	for (i = 0; i < BUFFER_LENGTH; i++) {
+		offBuffer[i] *= AMPLITUDE;
 	}
 }
 
 inline void swapBuffers() {
-	int16_t* temp = currentBuffer;
+	float* temp = currentBuffer;
 	currentBuffer = offBuffer;
 	offBuffer = temp;
 	currentBufferIndex = 0;
