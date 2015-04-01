@@ -35,8 +35,7 @@ void setDrive(struct Filter* filter, float d) {
 void filterSamples(struct Filter* filter, float* samples) {
 	int i;
 	for (i = 0; i < BUFFER_LENGTH; i++) {
-		float sample = samples[i];
-		samples[i] = tanhf(sample * filter->drive);
+		samples[i] = tanhf(samples[i] * filter->drive);
 		filter->y_a = filter->y_a + filter->g *
 			(tanhf(samples[i] - filter->resonance *
 				((filter->y_d_1 + filter->y_d)/2) - tanhf(filter->y_a)));
