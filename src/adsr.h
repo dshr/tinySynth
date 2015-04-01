@@ -1,3 +1,5 @@
+#ifndef _ADSR
+#define _ADSR
 #include "math.h"
 
 struct ADSR {
@@ -19,3 +21,4 @@ void setAttack(struct ADSR* adsr, unsigned a);
 void setDecay(struct ADSR* adsr, unsigned d);
 void setSustain(struct ADSR* adsr, float s);
 void setRelease(struct ADSR* adsr, unsigned r);
+#endif
