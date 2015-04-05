@@ -1,5 +1,7 @@
 #include "main.h"
 
+#define NOTES 6
+
 float samplingPeriod;
 float mtof[128];
 float sineWaveTable[513];
@@ -10,21 +12,14 @@ float *offBuffer;
 float buffer1[BUFFER_LENGTH];
 float buffer2[BUFFER_LENGTH];
 
-float osc1_phase;
-float osc1_note;
-
-float osc2_phase;
-float osc2_note;
-
-float osc3_phase;
-float osc3_note;
-
 float lfo1_phase;
 float lfo1_frequency;
 
-struct ADSR adsr1;
 struct Filter filter;
-int adsr1_on;
+
+struct Note notes[NOTES];
+struct Note* head;
+
 float level;
 float pulseWidthModAmount;
 float vibratoAmount;
@@ -49,9 +44,6 @@ int main(){
 
 	messageCounter = 0;
 
-	osc1_phase = 0.0f;
-	osc2_phase = 0.0f;
-
 	lfo1_phase = 0.0f;
 	lfo1_frequency = 0.5f;
 
@@ -72,7 +64,19 @@ int main(){
 		sineWaveTable[i] = cosf(2 * PI * i/512);
 	}
 
-	GPIO_SetBits(GPIOD, GPIO_Pin_12);
+	for (i = 0; i < NOTES; i++) {
+		struct Note* next;
+		struct Note* previous;
+		if (i != 0) previous = &notes[i-1];
+		else previous = NULL;
+		if (i == NOTES - 1) next = NULL;
+		else next = &notes[i+1];
+		initNote(&notes[i], next, previous);
+		initADSR(&notes[i].envelope, 1000, 50000, 0.8, 60000);
+		setADSROff(&notes[i].envelope, &notes[i].state);
+	}
+	head = &notes[0];
+
 	fillInBuffer();
 	swapBuffers();
 
@@ -82,10 +86,7 @@ int main(){
 	setupI2S();
 	setupUSART();
 
-	initADSR(&adsr1, 1000, 50000, 0.8, 60000);
 	initFilter(&filter, 2000.0f, 3.0f, 4.0f);
-	adsr1_on = 0;
-	setADSROff(&adsr1, &adsr1_on);
 	level = 0.1;
 
 	while(1){
@@ -96,16 +97,20 @@ int main(){
 			if (midiMessage[0] > 175) {
 				switch (midiMessage[1]){
 					case 67:
-						setAttack(&adsr1, midiMessage[2]*10000);
+						for (i = 0; i < NOTES; i++)
+							setAttack(&notes[i].envelope, midiMessage[2]*5000);
 						break;
 					case 68:
-						setDecay(&adsr1, midiMessage[2]*10000);
+						for (i = 0; i < NOTES; i++)
+							setDecay(&notes[i].envelope, midiMessage[2]*5000);
 						break;
 					case 69:
-						setSustain(&adsr1, (float)midiMessage[2] / 127.0f);
+						for (i = 0; i < NOTES; i++)
+							setSustain(&notes[i].envelope, (float)midiMessage[2] / 127.0f);
 						break;
 					case 70:
-						setRelease(&adsr1, midiMessage[2]*10000);
+						for (i = 0; i < NOTES; i++)
+							setRelease(&notes[i].envelope, midiMessage[2]*5000);
 						break;
 					case 72:
 						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
@@ -131,14 +136,14 @@ int main(){
 					default: break;
 				}
 			} else if (midiMessage[0] > 143) {
-				osc1_note = midiMessage[1];
-				setADSROn(&adsr1, &adsr1_on);
+				head = addNote(midiMessage[1], head);
 				GPIO_SetBits(GPIOD, GPIO_Pin_15);
-			} else if (midiMessage[0] < 144 && osc1_note == midiMessage[1]) {
-				setADSROff(&adsr1, &adsr1_on);
+			} else if (midiMessage[0] < 144) {
+				head = removeNote(midiMessage[1], head);
 				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
 			}
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
+			messageCounter = 0;
 		}
 		GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
 	}
@@ -164,7 +169,6 @@ void USART2_IRQHandler()
 {
 	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
 	{
-		if (messageCounter > 2)	messageCounter = 0;
 		int message = USART_ReceiveData(USART2);
 		if (messageCounter == 0 &&
 				((message > 127 && message < 160) ||
@@ -179,6 +183,7 @@ void USART2_IRQHandler()
 }
 
 inline void fillInBuffer() {
+	int i;
 	GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
 	float sample, phaseIncrement, lfo1_value;
 
@@ -191,23 +196,22 @@ inline void fillInBuffer() {
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note + (vibratoAmount * lfo1_value) + 0.41f);
-		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value);
-		incrementPhase(&osc1_phase, phaseIncrement);
-
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note  + (vibratoAmount * lfo1_value) + 0.41f);
-		sample += sawtooth(osc2_phase, phaseIncrement);
-		incrementPhase(&osc2_phase, phaseIncrement);
-
-		sample *= level * getADSRLevel(&adsr1);
-
-		runADSR(&adsr1, &adsr1_on);
+		for (i = 0; i < NOTES; i++)
+		{
+			phaseIncrement = getPhaseIncrementFromMIDI(notes[i].pitch +
+				(vibratoAmount * lfo1_value) + 0.41f);
+			sample += square(notes[i].phase, phaseIncrement,
+				pulseWidthModAmount * lfo1_value) * getADSRLevel(&notes[i].envelope);
+			incrementPhase(&notes[i].phase, phaseIncrement);
+			runADSR(&notes[i].envelope, &notes[i].state);
+		}
+		sample *= level;
+		sample /= (float) NOTES;
 
 		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;
 	}
 	filterSamples(&filter, offBuffer);
-	int i;
 	for (i = 0; i < BUFFER_LENGTH; i++) {
 		offBuffer[i] *= AMPLITUDE;
 	}

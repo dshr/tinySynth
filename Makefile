@@ -1,6 +1,6 @@
 # put your *.o targets here, make should handle the rest!
 
-SRCS = main.c setup.c adsr.c filter.c system_stm32f4xx.c
+SRCS = note.c adsr.c filter.c setup.c main.c system_stm32f4xx.c
 
 # all the files will be generated with this name (main.elf, main.bin, main.hex, etc)
 
@@ -19,7 +19,7 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 CFLAGS += -DPI=3.14159265f
 CFLAGS += -DEXP=2.7182818285f
 CFLAGS += -DSEMITONE=1.0594630943592953
-CFLAGS += -DBUFFER_LENGTH=2
+CFLAGS += -DBUFFER_LENGTH=32
 CFLAGS += -DSAMPLING_FREQ=48000
 
 CFLAGS += -DAMPLITUDE=32000

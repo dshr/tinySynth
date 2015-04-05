@@ -1,6 +1,6 @@
 #ifndef _ADSR
 #define _ADSR
-#include "math.h"
+#include <math.h>
 
 struct ADSR {
 	unsigned attackTime;

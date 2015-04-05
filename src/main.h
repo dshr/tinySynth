@@ -2,6 +2,7 @@
 #include "setup.h"
 #include "adsr.h"
 #include "filter.h"
+#include "note.h"
 #include <math.h>
 
 void fillInBuffer();
