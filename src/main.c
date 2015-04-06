@@ -89,6 +89,7 @@ int main(){
 	initFilter(&filter, 2000.0f, 3.0f, 4.0f);
 	level = 0.1;
 
+	GPIO_SetBits(GPIOD, GPIO_Pin_12);
 	while(1){
 		if (offBufferIndex == 0) {
 			fillInBuffer();
@@ -136,16 +137,16 @@ int main(){
 					default: break;
 				}
 			} else if (midiMessage[0] > 143) {
-				head = addNote(midiMessage[1], head);
+				head = addNote(midiMessage[1], head, NOTES);
 				GPIO_SetBits(GPIOD, GPIO_Pin_15);
 			} else if (midiMessage[0] < 144) {
-				head = removeNote(midiMessage[1], head);
+				head = removeNote(midiMessage[1], head, NOTES);
 				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
 			}
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
 			messageCounter = 0;
 		}
-		GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
+		// GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
 	}
 	return 0;
 }
@@ -196,8 +197,7 @@ inline void fillInBuffer() {
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
 
-		for (i = 0; i < NOTES; i++)
-		{
+		for (i = 0; i < NOTES; i++) {
 			phaseIncrement = getPhaseIncrementFromMIDI(notes[i].pitch +
 				(vibratoAmount * lfo1_value) + 0.41f);
 			sample += square(notes[i].phase, phaseIncrement,

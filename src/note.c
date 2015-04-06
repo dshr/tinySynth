@@ -8,15 +8,16 @@ void initNote(struct Note* note, struct Note* next, struct Note* previous) {
 	note->state = 0;
 }
 
-struct Note* addNote(int pitch, struct Note* head) {
+struct Note* addNote(int pitch, struct Note* head, int numOfNotes) {
+	int i;
 	struct Note* tail = head;
-	while(tail->next != NULL) {
-		tail = tail->next;
+	for (i = 0; i < numOfNotes; i++) {
+		if (tail->pitch == pitch) break;
+		if (i < numOfNotes - 1) tail = tail->next;
 	}
-	setADSROff(&tail->envelope, &tail->state);
-
 	if (tail != head) {
-		tail->previous->next = NULL;
+		tail->previous->next = tail->next;
+		if (tail->next != NULL) tail->next->previous = tail->previous;
 		tail->previous = NULL;
 		head->previous = tail;
 		tail->next = head;
@@ -27,19 +28,25 @@ struct Note* addNote(int pitch, struct Note* head) {
 	return newHead;
 }
 
-struct Note* removeNote(int pitch, struct Note* head) {
-	// find the note with the corresponding pitch in the queue
-	struct Note* ourNote = head;
-	while(ourNote->pitch != pitch) {
-		ourNote = ourNote->next;
+struct Note* removeNote(int pitch, struct Note* head, int numOfNotes) {
+	// try to find the note with the corresponding pitch in the queue
+	int i;
+	struct Note* ourNote = NULL;
+	struct Note* nextNote = head;
+	for (i = 0; i < numOfNotes; i++) {
+		if (nextNote->pitch == pitch) ourNote = nextNote;
+		if (i < numOfNotes - 1) nextNote = nextNote->next;
 	}
-	// turn it off
+	// of there is no such note, do nothing
+	if (ourNote == NULL) return head;
+	// otherwise turn it off
 	setADSROff(&ourNote->envelope, &ourNote->state);
-	// move back in the queue, so all notes that are on are in front of it
+	// move it back in the queue, so all notes that are on are in front of it
 	if (ourNote->next->state != 0) {
-		struct Note* nextNote = ourNote->next;
+		nextNote = ourNote->next;
 		nextNote->previous = ourNote->previous;
-		ourNote->previous->next = nextNote;
+		if (ourNote->previous != NULL) ourNote->previous->next = nextNote;
+		else head = nextNote;
 		while (nextNote->next != NULL && nextNote->next->state != 0) {
 			nextNote = nextNote->next;
 		}

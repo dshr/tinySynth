@@ -13,6 +13,6 @@ struct Note {
 };
 
 void initNote(struct Note* note, struct Note* next, struct Note* previous);
-struct Note* addNote(int pitch, struct Note* head);
-struct Note* removeNote(int pitch, struct Note* head);
+struct Note* addNote(int pitch, struct Note* head, int numOfNotes);
+struct Note* removeNote(int pitch, struct Note* head, int numOfNotes);
 #endif

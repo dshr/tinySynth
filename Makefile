@@ -13,13 +13,13 @@ PROJ_NAME=main
 CC=arm-none-eabi-gcc
 OBJCOPY=arm-none-eabi-objcopy
 
-CFLAGS  = -O3 -Wall -Tstm32_flash.ld -ggdb
+CFLAGS  = -Ofast -Wall -Tstm32_flash.ld -ggdb
 CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m4 -mthumb-interwork
 CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 CFLAGS += -DPI=3.14159265f
 CFLAGS += -DEXP=2.7182818285f
 CFLAGS += -DSEMITONE=1.0594630943592953
-CFLAGS += -DBUFFER_LENGTH=32
+CFLAGS += -DBUFFER_LENGTH=128
 CFLAGS += -DSAMPLING_FREQ=48000
 
 CFLAGS += -DAMPLITUDE=32000
