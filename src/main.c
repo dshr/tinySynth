@@ -18,7 +18,7 @@ float lfo1_frequency;
 struct Filter filter;
 
 struct Note notes[NOTES];
-struct Note* head;
+int monoMode = 0;
 
 float level;
 float pulseWidthModAmount;
@@ -65,17 +65,9 @@ int main(){
 	}
 
 	for (i = 0; i < NOTES; i++) {
-		struct Note* next;
-		struct Note* previous;
-		if (i != 0) previous = &notes[i-1];
-		else previous = NULL;
-		if (i == NOTES - 1) next = NULL;
-		else next = &notes[i+1];
-		initNote(&notes[i], next, previous);
+		initNote(&notes[i], NOTES);
 		initADSR(&notes[i].envelope, 1000, 50000, 0.8, 60000);
-		setADSROff(&notes[i].envelope, &notes[i].state);
 	}
-	head = &notes[0];
 
 	fillInBuffer();
 	swapBuffers();
@@ -97,6 +89,14 @@ int main(){
 		if (messageCounter > 2) {
 			if (midiMessage[0] > 175) {
 				switch (midiMessage[1]){
+					case 10:
+						if (midiMessage[2] == 127)
+						{
+							monoMode = 1;
+						} else {
+							monoMode = 0;
+						}
+						break;
 					case 67:
 						for (i = 0; i < NOTES; i++)
 							setAttack(&notes[i].envelope, midiMessage[2]*5000);
@@ -137,10 +137,10 @@ int main(){
 					default: break;
 				}
 			} else if (midiMessage[0] > 143) {
-				head = addNote(midiMessage[1], head, NOTES);
+				addNote(midiMessage[1], notes, NOTES);
 				GPIO_SetBits(GPIOD, GPIO_Pin_15);
 			} else if (midiMessage[0] < 144) {
-				head = removeNote(midiMessage[1], head, NOTES);
+				removeNote(midiMessage[1], notes, NOTES);
 				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
 			}
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
@@ -188,6 +188,16 @@ inline void fillInBuffer() {
 	GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
 	float sample, phaseIncrement, lfo1_value;
 
+	struct Note* theNote = NULL;
+	if (monoMode) {
+		for (i = 0; i < NOTES; i++) {
+			if (notes[i].position == 1) {
+				theNote = &notes[i];
+				break;
+			}
+		}
+	}
+
 	while (offBufferIndex < BUFFER_LENGTH)
 	{
 		sample = 0;
@@ -196,17 +206,25 @@ inline void fillInBuffer() {
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
-
-		for (i = 0; i < NOTES; i++) {
-			phaseIncrement = getPhaseIncrementFromMIDI(notes[i].pitch +
+		if (monoMode && theNote != NULL) {
+			phaseIncrement = getPhaseIncrementFromMIDI(theNote->pitch +
 				(vibratoAmount * lfo1_value) + 0.41f);
-			sample += square(notes[i].phase, phaseIncrement,
-				pulseWidthModAmount * lfo1_value) * getADSRLevel(&notes[i].envelope);
-			incrementPhase(&notes[i].phase, phaseIncrement);
-			runADSR(&notes[i].envelope, &notes[i].state);
+			sample += square(theNote->phase, phaseIncrement,
+				pulseWidthModAmount * lfo1_value) * getADSRLevel(&theNote->envelope);
+			incrementPhase(&theNote->phase, phaseIncrement);
+			runADSR(&theNote->envelope, &theNote->state);
+		} else {
+			for (i = 0; i < NOTES; i++) {
+				phaseIncrement = getPhaseIncrementFromMIDI(notes[i].pitch +
+					(vibratoAmount * lfo1_value) + 0.41f);
+				sample += square(notes[i].phase, phaseIncrement,
+					pulseWidthModAmount * lfo1_value) * getADSRLevel(&notes[i].envelope);
+				incrementPhase(&notes[i].phase, phaseIncrement);
+				runADSR(&notes[i].envelope, &notes[i].state);
+			}
+			sample /= (float) NOTES;
 		}
 		sample *= level;
-		sample /= (float) NOTES;
 
 		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;

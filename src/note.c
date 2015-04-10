@@ -1,59 +1,46 @@
 #include "note.h"
 
-void initNote(struct Note* note, struct Note* next, struct Note* previous) {
+void initNote(struct Note* note, int numOfNotes) {
 	note->pitch = 0;
 	note->phase = 0;
-	note->next = next;
-	note->previous = previous;
 	note->state = 0;
+	note->position = numOfNotes;
+	setADSROff(&note->envelope, &note->state);
 }
 
-struct Note* addNote(int pitch, struct Note* head, int numOfNotes) {
+void addNote(int pitch, struct Note notes[], int numOfNotes) {
 	int i;
-	struct Note* tail = head;
 	for (i = 0; i < numOfNotes; i++) {
-		if (tail->pitch == pitch) break;
-		if (i < numOfNotes - 1) tail = tail->next;
+		if (notes[i].position == numOfNotes || notes[i].pitch == pitch) {
+			notes[i].pitch = pitch;
+			notes[i].position = 0;
+			setADSROn(&notes[i].envelope, &notes[i].state);
+			break;
+		}
 	}
-	if (tail != head) {
-		tail->previous->next = tail->next;
-		if (tail->next != NULL) tail->next->previous = tail->previous;
-		tail->previous = NULL;
-		head->previous = tail;
-		tail->next = head;
+	for (i = 0; i < numOfNotes; i++) {
+		if (notes[i].position < numOfNotes) notes[i].position++;
 	}
-	struct Note* newHead = tail;
-	newHead->pitch = pitch;
-	setADSROn(&newHead->envelope, &newHead->state);
-	return newHead;
 }
 
-struct Note* removeNote(int pitch, struct Note* head, int numOfNotes) {
-	// try to find the note with the corresponding pitch in the queue
+void removeNote(int pitch, struct Note notes[], int numOfNotes) {
 	int i;
 	struct Note* ourNote = NULL;
-	struct Note* nextNote = head;
 	for (i = 0; i < numOfNotes; i++) {
-		if (nextNote->pitch == pitch) ourNote = nextNote;
-		if (i < numOfNotes - 1) nextNote = nextNote->next;
-	}
-	// of there is no such note, do nothing
-	if (ourNote == NULL) return head;
-	// otherwise turn it off
-	setADSROff(&ourNote->envelope, &ourNote->state);
-	// move it back in the queue, so all notes that are on are in front of it
-	if (ourNote->next->state != 0) {
-		nextNote = ourNote->next;
-		nextNote->previous = ourNote->previous;
-		if (ourNote->previous != NULL) ourNote->previous->next = nextNote;
-		else head = nextNote;
-		while (nextNote->next != NULL && nextNote->next->state != 0) {
-			nextNote = nextNote->next;
+		if (notes[i].pitch == pitch) {
+			ourNote = &notes[i];
+			break;
 		}
-		ourNote->previous = nextNote;
-		if (nextNote->next != NULL) nextNote->next->previous = ourNote;
-		ourNote->next = nextNote->next;
-		nextNote->next = ourNote;
 	}
-	return head;
+	if (ourNote == NULL) return;
+	int lastActiveNotePosition = ourNote->position;
+	for (i = 0; i < numOfNotes; i++) {
+		if (notes[i].position > ourNote->position && notes[i].state == 1) {
+			if (lastActiveNotePosition < notes[i].position)
+				lastActiveNotePosition = notes[i].position;
+			notes[i].position--;
+		}
+	}
+	ourNote->position = lastActiveNotePosition;
+	setADSROff(&ourNote->envelope, &ourNote->state);
 }

@@ -6,13 +6,12 @@
 struct Note {
 	float pitch;
 	float phase;
-	struct Note* next;
-	struct Note* previous;
 	struct ADSR envelope;
 	int state;
+	int position;
 };
 
-void initNote(struct Note* note, struct Note* next, struct Note* previous);
-struct Note* addNote(int pitch, struct Note* head, int numOfNotes);
-struct Note* removeNote(int pitch, struct Note* head, int numOfNotes);
+void initNote(struct Note* note, int numOfNotes);
+void addNote(int pitch, struct Note notes[], int numOfNotes);
+void removeNote(int pitch, struct Note notes[], int numOfNotes);
 #endif
