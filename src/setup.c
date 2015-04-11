@@ -127,8 +127,8 @@ void setupIRC() {
 
   USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
   NVIC_InitType.NVIC_IRQChannel = USART2_IRQn;
-  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 7;
-  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelSubPriority = 1;
   NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitType);
 }

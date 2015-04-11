@@ -15,9 +15,8 @@ float buffer2[BUFFER_LENGTH];
 float lfo1_phase;
 float lfo1_frequency;
 
-struct Filter filter;
-
 struct Note notes[NOTES];
+float inverseNumberOfNotes = (float) 1 / NOTES;
 int monoMode = 0;
 
 float level;
@@ -66,8 +65,12 @@ int main(){
 
 	for (i = 0; i < NOTES; i++) {
 		initNote(&notes[i], NOTES);
-		initADSR(&notes[i].envelope, 1000, 50000, 0.8, 60000);
+		initADSR(&notes[i].ampEnvelope, 1000, 50000, 0.8, 60000);
+		initADSR(&notes[i].filterEnvelope, 1000, 50000, 0.8, 60000);
+		initFilter(&notes[i].filter, 2000.0f, 3.0f, 4.0f);
 	}
+
+	level = 0.1;
 
 	fillInBuffer();
 	swapBuffers();
@@ -78,49 +81,87 @@ int main(){
 	setupI2S();
 	setupUSART();
 
-	initFilter(&filter, 2000.0f, 3.0f, 4.0f);
-	level = 0.1;
-
 	GPIO_SetBits(GPIOD, GPIO_Pin_12);
+	i = 0;
 	while(1){
 		if (offBufferIndex == 0) {
 			fillInBuffer();
 		}
+		GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
+	}
+	return 0;
+}
+
+void SPI3_IRQHandler()
+{
+	if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE))
+	{
+		int16_t sample;
+		sample = (int16_t) currentBuffer[currentBufferIndex/2];
+		SPI_I2S_SendData(SPI3, sample);
+		currentBufferIndex++;
+		if (currentBufferIndex == BUFFER_LENGTH*2){
+			GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
+			float* temp = currentBuffer;
+			currentBuffer = offBuffer;
+			offBuffer = temp;
+			currentBufferIndex = 0;
+			offBufferIndex = 0;
+		}
+	}
+}
+
+void USART2_IRQHandler()
+{
+	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
+	{
+		int message = USART_ReceiveData(USART2);
+		if (messageCounter == 0 &&
+				((message > 127 && message < 160) ||
+				 (message > 175 && message < 192))) {
+			midiMessage[messageCounter] = message;
+			messageCounter++;
+		} else if (messageCounter > 0) {
+			midiMessage[messageCounter] = message;
+			messageCounter++;
+		}
 		if (messageCounter > 2) {
 			if (midiMessage[0] > 175) {
+				int i;
 				switch (midiMessage[1]){
 					case 10:
 						if (midiMessage[2] == 127)
-						{
 							monoMode = 1;
-						} else {
+						else
 							monoMode = 0;
-						}
 						break;
 					case 67:
 						for (i = 0; i < NOTES; i++)
-							setAttack(&notes[i].envelope, midiMessage[2]*5000);
+							setAttack(&notes[i].ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 68:
 						for (i = 0; i < NOTES; i++)
-							setDecay(&notes[i].envelope, midiMessage[2]*5000);
+							setDecay(&notes[i].ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 69:
 						for (i = 0; i < NOTES; i++)
-							setSustain(&notes[i].envelope, (float)midiMessage[2] / 127.0f);
+							setSustain(&notes[i].ampEnvelope, (float)midiMessage[2] / 127.0f);
 						break;
 					case 70:
 						for (i = 0; i < NOTES; i++)
-							setRelease(&notes[i].envelope, midiMessage[2]*5000);
+							setRelease(&notes[i].ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 72:
-						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
+						for (i = 0; i < NOTES; i++)
+							setDrive(&notes[i].filter,((float)midiMessage[2] / 127.0f) * 20.0f);
 						break;
 					case 73:
-						setFrequency(&filter,((float)midiMessage[2] / 127.0f) * 12000.f);
+						for (i = 0; i < NOTES; i++)
+							setFrequency(&notes[i].filter,((float)midiMessage[2] / 127.0f) * 12000.f);
 						break;
 					case 74:
-						setResonance(&filter,((float)midiMessage[2] / 127.0f) * 4.0f);
+						for (i = 0; i < NOTES; i++)
+							setResonance(&notes[i].filter,((float)midiMessage[2] / 127.0f) * 4.0f);
 						break;
 					case 75:
 						pulseWidthModAmount = (float)midiMessage[2] / 127.0f;
@@ -146,40 +187,6 @@ int main(){
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
 			messageCounter = 0;
 		}
-		// GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
-	}
-	return 0;
-}
-
-void SPI3_IRQHandler()
-{
-	if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE))
-	{
-		int16_t sample;
-		sample = (int16_t) currentBuffer[currentBufferIndex/2];
-		SPI_I2S_SendData(SPI3, sample);
-		currentBufferIndex++;
-		if (currentBufferIndex == BUFFER_LENGTH*2){
-			GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-			swapBuffers();
-		}
-	}
-}
-
-void USART2_IRQHandler()
-{
-	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
-	{
-		int message = USART_ReceiveData(USART2);
-		if (messageCounter == 0 &&
-				((message > 127 && message < 160) ||
-				 (message > 175 && message < 192))) {
-			midiMessage[messageCounter] = message;
-			messageCounter++;
-		} else if (messageCounter > 0) {
-			midiMessage[messageCounter] = message;
-			messageCounter++;
-		}
 	}
 }
 
@@ -201,7 +208,6 @@ inline void fillInBuffer() {
 	while (offBufferIndex < BUFFER_LENGTH)
 	{
 		sample = 0;
-
 		// run LFO's
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
@@ -210,28 +216,28 @@ inline void fillInBuffer() {
 			phaseIncrement = getPhaseIncrementFromMIDI(theNote->pitch +
 				(vibratoAmount * lfo1_value) + 0.41f);
 			sample += square(theNote->phase, phaseIncrement,
-				pulseWidthModAmount * lfo1_value) * getADSRLevel(&theNote->envelope);
+				pulseWidthModAmount * lfo1_value) * getADSRLevel(&theNote->ampEnvelope);
 			incrementPhase(&theNote->phase, phaseIncrement);
-			runADSR(&theNote->envelope, &theNote->state);
+			filterSample(&theNote->filter, &sample);
+			runADSR(&theNote->ampEnvelope, &theNote->state);
 		} else {
 			for (i = 0; i < NOTES; i++) {
 				phaseIncrement = getPhaseIncrementFromMIDI(notes[i].pitch +
 					(vibratoAmount * lfo1_value) + 0.41f);
-				sample += square(notes[i].phase, phaseIncrement,
-					pulseWidthModAmount * lfo1_value) * getADSRLevel(&notes[i].envelope);
+				float noteSample = square(notes[i].phase, phaseIncrement,
+					pulseWidthModAmount * lfo1_value) * getADSRLevel(&notes[i].ampEnvelope);
 				incrementPhase(&notes[i].phase, phaseIncrement);
-				runADSR(&notes[i].envelope, &notes[i].state);
+				filterSample(&notes[i].filter, &noteSample);
+				runADSR(&notes[i].ampEnvelope, &notes[i].state);
+				sample += noteSample;
 			}
-			sample /= (float) NOTES;
 		}
+		sample *= inverseNumberOfNotes;
 		sample *= level;
+		sample *= AMPLITUDE;
 
 		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;
-	}
-	filterSamples(&filter, offBuffer);
-	for (i = 0; i < BUFFER_LENGTH; i++) {
-		offBuffer[i] *= AMPLITUDE;
 	}
 }
 
@@ -243,12 +249,13 @@ inline void swapBuffers() {
 	offBufferIndex = 0;
 }
 
-inline float polyBlep(float phase, float phaseIncrement){
+inline float polyBlep(float phase, float phaseIncrement) {
+	float inversePhaseIncrement = 1.0f / phaseIncrement;
 	if (phase < phaseIncrement) {
-			phase /= phaseIncrement;
+			phase *= inversePhaseIncrement;
 			return phase+phase - phase*phase - 1;
 	} else if (phase > 1.0f - phaseIncrement) {
-			phase = (phase - 1.0f) / phaseIncrement;
+			phase = (phase - 1.0f) * inversePhaseIncrement;
 			return phase*phase + phase+phase + 1;
 	} else {
 		return 0.0f;
