@@ -1,4 +1,5 @@
 #include "stm32f4xx_conf.h"
+#include "globals.h"
 #include "math.h"
 
 #ifndef _FILTER
@@ -17,6 +18,7 @@ struct Filter {
 	float y_d_1;
 };
 
+void fillInTanhLookUpTable();
 float polytan(float x);
 float polyexp(float x);
 float polytanhf(float x);

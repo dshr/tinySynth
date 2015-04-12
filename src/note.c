@@ -2,30 +2,28 @@
 
 inline void initNote(struct Note* note, int numOfNotes) {
 	note->pitch = 0;
-	note->phase = 0;
 	note->state = 0;
 	note->position = numOfNotes;
-	setADSROff(&note->ampEnvelope, &note->state);
-	setADSROff(&note->filterEnvelope, &note->state);
 }
 
-inline void addNote(int pitch, struct Note notes[], int numOfNotes) {
+inline int addNote(int pitch, struct Note notes[], int numOfNotes) {
 	int i;
+	int newHead = 0;
 	for (i = 0; i < numOfNotes; i++) {
 		if (notes[i].position == numOfNotes || notes[i].pitch == pitch) {
 			notes[i].pitch = pitch;
 			notes[i].position = 0;
-			setADSROn(&notes[i].ampEnvelope, &notes[i].state);
-			// setADSROn(&notes[i].filterEnvelope, &notes[i].state);
+			newHead = i;
 			break;
 		}
 	}
 	for (i = 0; i < numOfNotes; i++) {
 		if (notes[i].position < numOfNotes) notes[i].position++;
 	}
+	return newHead;
 }
 
-inline void removeNote(int pitch, struct Note notes[], int numOfNotes) {
+inline int removeNote(int pitch, struct Note notes[], int numOfNotes) {
 	int i, j;
 	struct Note* ourNote = NULL;
 	for (i = 0; i < numOfNotes; i++) {
@@ -40,8 +38,15 @@ inline void removeNote(int pitch, struct Note notes[], int numOfNotes) {
 				}
 			}
 			ourNote->position = lastActiveNotePosition;
-			setADSROff(&ourNote->ampEnvelope, &ourNote->state);
-			setADSROff(&ourNote->filterEnvelope, &ourNote->state);
+			ourNote->state = 0;
 		}
 	}
+	int newHead = 0;
+	for (i = 0; i < NOTES; i++) {
+		if (notes[i].position == 1) {
+			newHead = i;
+			break;
+		}
+	}
+	return newHead;
 }

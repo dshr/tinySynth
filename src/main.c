@@ -1,7 +1,5 @@
 #include "main.h"
 
-#define NOTES 6
-
 float samplingPeriod;
 float mtof[128];
 float sineWaveTable[513];
@@ -16,8 +14,13 @@ float lfo1_phase;
 float lfo1_frequency;
 
 struct Note notes[NOTES];
-float inverseNumberOfNotes = (float) 1 / NOTES;
-int monoMode = 0;
+int headPos = 0;
+float osc1_phase;
+float osc2_phase;
+float osc3_phase;
+struct ADSR ampEnvelope;
+struct Filter filter;
+struct ADSR filterEnvelope;
 
 float level;
 float pulseWidthModAmount;
@@ -63,12 +66,15 @@ int main(){
 		sineWaveTable[i] = cosf(2 * PI * i/512);
 	}
 
+	fillInTanhLookUpTable();
+
 	for (i = 0; i < NOTES; i++) {
 		initNote(&notes[i], NOTES);
-		initADSR(&notes[i].ampEnvelope, 1000, 50000, 0.8, 60000);
-		initADSR(&notes[i].filterEnvelope, 1000, 50000, 0.8, 60000);
-		initFilter(&notes[i].filter, 2000.0f, 3.0f, 4.0f);
 	}
+
+	initFilter(&filter, 2000.0f, 0.0f, 4.0f);
+	initADSR(&ampEnvelope, 0.0f, 0.0f, 1.0f, 1000.0f);
+	initADSR(&filterEnvelope, 0.0f, 0.0f, 1.0f, 1000.0f);
 
 	level = 0.1;
 
@@ -127,41 +133,27 @@ void USART2_IRQHandler()
 		}
 		if (messageCounter > 2) {
 			if (midiMessage[0] > 175) {
-				int i;
 				switch (midiMessage[1]){
-					case 10:
-						if (midiMessage[2] == 127)
-							monoMode = 1;
-						else
-							monoMode = 0;
-						break;
 					case 67:
-						for (i = 0; i < NOTES; i++)
-							setAttack(&notes[i].ampEnvelope, midiMessage[2]*5000);
+						setAttack(&ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 68:
-						for (i = 0; i < NOTES; i++)
-							setDecay(&notes[i].ampEnvelope, midiMessage[2]*5000);
+						setDecay(&ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 69:
-						for (i = 0; i < NOTES; i++)
-							setSustain(&notes[i].ampEnvelope, (float)midiMessage[2] / 127.0f);
+						setSustain(&ampEnvelope, (float)midiMessage[2] / 127.0f);
 						break;
 					case 70:
-						for (i = 0; i < NOTES; i++)
-							setRelease(&notes[i].ampEnvelope, midiMessage[2]*5000);
+						setRelease(&ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 72:
-						for (i = 0; i < NOTES; i++)
-							setDrive(&notes[i].filter,((float)midiMessage[2] / 127.0f) * 20.0f);
+						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
 						break;
 					case 73:
-						for (i = 0; i < NOTES; i++)
-							setFrequency(&notes[i].filter,((float)midiMessage[2] / 127.0f) * 12000.f);
+						setFrequency(&filter,((float)midiMessage[2] / 127.0f) * 12000.f);
 						break;
 					case 74:
-						for (i = 0; i < NOTES; i++)
-							setResonance(&notes[i].filter,((float)midiMessage[2] / 127.0f) * 4.0f);
+						setResonance(&filter,((float)midiMessage[2] / 127.0f) * 4.0f);
 						break;
 					case 75:
 						pulseWidthModAmount = (float)midiMessage[2] / 127.0f;
@@ -178,10 +170,16 @@ void USART2_IRQHandler()
 					default: break;
 				}
 			} else if (midiMessage[0] > 143) {
-				addNote(midiMessage[1], notes, NOTES);
+				headPos = addNote(midiMessage[1], notes, NOTES);
+				setADSROn(&ampEnvelope, &notes[headPos].state);
+				setADSROn(&filterEnvelope, &notes[headPos].state);
 				GPIO_SetBits(GPIOD, GPIO_Pin_15);
 			} else if (midiMessage[0] < 144) {
-				removeNote(midiMessage[1], notes, NOTES);
+				headPos = removeNote(midiMessage[1], notes, NOTES);
+				if (!notes[headPos].state) {
+					setADSROff(&ampEnvelope);
+					setADSROff(&filterEnvelope);
+				}
 				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
 			}
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
@@ -191,19 +189,8 @@ void USART2_IRQHandler()
 }
 
 inline void fillInBuffer() {
-	int i;
 	GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
 	float sample, phaseIncrement, lfo1_value;
-
-	struct Note* theNote = NULL;
-	if (monoMode) {
-		for (i = 0; i < NOTES; i++) {
-			if (notes[i].position == 1) {
-				theNote = &notes[i];
-				break;
-			}
-		}
-	}
 
 	while (offBufferIndex < BUFFER_LENGTH)
 	{
@@ -212,28 +199,22 @@ inline void fillInBuffer() {
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
-		if (monoMode && theNote != NULL) {
-			phaseIncrement = getPhaseIncrementFromMIDI(theNote->pitch +
-				(vibratoAmount * lfo1_value) + 0.41f);
-			sample += square(theNote->phase, phaseIncrement,
-				pulseWidthModAmount * lfo1_value) * getADSRLevel(&theNote->ampEnvelope);
-			incrementPhase(&theNote->phase, phaseIncrement);
-			filterSample(&theNote->filter, &sample);
-			runADSR(&theNote->ampEnvelope, &theNote->state);
-		} else {
-			for (i = 0; i < NOTES; i++) {
-				phaseIncrement = getPhaseIncrementFromMIDI(notes[i].pitch +
-					(vibratoAmount * lfo1_value) + 0.41f);
-				float noteSample = square(notes[i].phase, phaseIncrement,
-					pulseWidthModAmount * lfo1_value) * getADSRLevel(&notes[i].ampEnvelope);
-				incrementPhase(&notes[i].phase, phaseIncrement);
-				filterSample(&notes[i].filter, &noteSample);
-				runADSR(&notes[i].ampEnvelope, &notes[i].state);
-				sample += noteSample;
-			}
-		}
-		sample *= inverseNumberOfNotes;
-		sample *= level;
+
+		phaseIncrement = getPhaseIncrementFromMIDI(notes[headPos].pitch +
+			(vibratoAmount * lfo1_value) + 0.41f);
+		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value) * getADSRLevel(&ampEnvelope);
+		incrementPhase(&osc1_phase, phaseIncrement);
+
+		phaseIncrement = getPhaseIncrementFromMIDI(notes[headPos].pitch +
+			(vibratoAmount * lfo1_value) + 12.41f);
+		sample += sawtooth(osc2_phase, phaseIncrement) * getADSRLevel(&ampEnvelope);
+		incrementPhase(&osc2_phase, phaseIncrement);
+
+		filterSample(&filter, &sample);
+		runADSR(&ampEnvelope, &notes[headPos].state);
+		runADSR(&filterEnvelope, &notes[headPos].state);
+
+		sample *= level * 0.5f;
 		sample *= AMPLITUDE;
 
 		offBuffer[offBufferIndex] = sample;
@@ -305,15 +286,4 @@ inline float square(float phase, float phaseIncrement, float pulseWidthMod){
 
 inline float sawtooth(float phase, float phaseIncrement){
 	return (float) 1 - 2 * phase + polyBlep(phase, phaseIncrement);
-}
-
-inline float getInterpolatedValue(float value, float* array){
-	int roundedValue = (int)value;
-	float decimalPart = value - roundedValue;
-	if (decimalPart > 0.0f){
-		float diff = array[roundedValue + 1] - array[roundedValue];
-		return array[roundedValue] + (decimalPart * diff);
-	} else {
-		return array[roundedValue];
-	}
 }

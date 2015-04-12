@@ -1,6 +1,6 @@
 # put your *.o targets here, make should handle the rest!
 
-SRCS = note.c adsr.c filter.c setup.c main.c system_stm32f4xx.c
+SRCS = globals.c note.c adsr.c filter.c setup.c main.c system_stm32f4xx.c
 
 # all the files will be generated with this name (main.elf, main.bin, main.hex, etc)
 
@@ -16,14 +16,6 @@ OBJCOPY=arm-none-eabi-objcopy
 CFLAGS  = -Ofast -Wall -Tstm32_flash.ld -ggdb
 CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m4 -mthumb-interwork
 CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
-CFLAGS += -DPI=3.14159265f
-CFLAGS += -DEXP=2.7182818285f
-CFLAGS += -DSEMITONE=1.0594630943592953f
-CFLAGS += -DBUFFER_LENGTH=512
-CFLAGS += -DSAMPLING_FREQ=48000
-
-CFLAGS += -DAMPLITUDE=32000
-CFLAGS += -DA_FOUR=440.0f
 
 ###################################################
 

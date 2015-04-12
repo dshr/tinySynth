@@ -1,5 +1,13 @@
 #include "filter.h"
 
+float tanhLookUpTable[6001];
+
+void fillInTanhLookUpTable() {
+	int i;
+	for (i = 0; i < 6001; i++)
+		tanhLookUpTable[i] = tanhf((float) (i * 0.001f) - 3.0f);
+}
+
 inline void initFilter(struct Filter* filter, float f, float r, float d) {
 	filter->y_a = 0.0f;
 	filter->y_b = 0.0f;
@@ -15,22 +23,25 @@ inline void initFilter(struct Filter* filter, float f, float r, float d) {
 
 inline float polytan(float x) {
 	return x + (0.33333333333f * x * x * x)
-					 + (0.13333333333f * x * x * x * x * x);
-					 // + (0.05396825397f * x * x * x * x * x * x * x);
+					 + (0.13333333333f * x * x * x * x * x)
+					 + (0.05396825397f * x * x * x * x * x * x * x);
 }
 
 inline float polyexp(float x) {
 	return 1 + x
 					 + (0.5f * x * x)
 					 + (0.1666666667f * x * x * x)
-					 + (0.04166666667f * x * x * x * x)
-					 + (0.008333333333f * x * x * x * x * x);
+					 + (0.04166666667f * x * x * x * x);
+					 // + (0.008333333333f * x * x * x * x * x);
 }
 
 inline float polytanhf(float x) {
-	return x - (0.33333333333f * x * x * x)
-					 + (0.13333333333f * x * x * x * x * x);
-					 // - (0.05396825397f * x * x * x * x * x * x * x);
+	// return x - (0.33333333333f * x * x * x)
+	// 				 + (0.13333333333f * x * x * x * x * x);
+	// 				 // - (0.05396825397f * x * x * x * x * x * x * x);
+	if (x >= 3.0f) return 0.99f;
+	if (x <= -3.0f) return -0.99f;
+	return getInterpolatedValue((x + 3.0f) * 1000.0f, tanhLookUpTable);
 }
 
 void setFrequency(struct Filter* filter, float f) {
@@ -53,7 +64,7 @@ void setDrive(struct Filter* filter, float d) {
 }
 
 void filterSample(struct Filter* filter, float* sample) {
-		// *sample = tanhf(*sample * filter->drive);
+		*sample = polytanhf(*sample * filter->drive);
 		filter->y_a = filter->y_a + filter->g *
 			(polytanhf(*sample - filter->resonance *
 				((filter->y_d_1 + filter->y_d)*0.5f) - polytanhf(filter->y_a)));
@@ -62,6 +73,6 @@ void filterSample(struct Filter* filter, float* sample) {
 
 		filter->y_d_1 = filter->y_d;
 
-		filter->y_d = filter->y_d + filter->g * (filter->y_c - (filter->y_d));
+		filter->y_d = filter->y_d + filter->g * (polytanhf(filter->y_c) - polytanhf(filter->y_d));
 		*sample = filter->y_d;
 }

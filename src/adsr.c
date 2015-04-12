@@ -33,12 +33,9 @@ void setADSROn(struct ADSR* adsr, int* on){
 	}
 }
 
-void setADSROff(struct ADSR* adsr, int* on){
-	if (*on) {
-		adsr->index = 0;
-		adsr->offLevel = adsr->level;
-		*on = 0;
-	}
+void setADSROff(struct ADSR* adsr){
+	adsr->index = 0;
+	adsr->offLevel = adsr->level;
 }
 
 void runADSR(struct ADSR* adsr, int* on){
