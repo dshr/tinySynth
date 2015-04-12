@@ -21,6 +21,8 @@ float osc3_phase;
 struct ADSR ampEnvelope;
 struct Filter filter;
 struct ADSR filterEnvelope;
+float frequency;
+float filterEnvelopeDepth = 2000.0f;
 
 float level;
 float pulseWidthModAmount;
@@ -74,7 +76,7 @@ int main(){
 
 	initFilter(&filter, 2000.0f, 0.0f, 4.0f);
 	initADSR(&ampEnvelope, 0.0f, 0.0f, 1.0f, 1000.0f);
-	initADSR(&filterEnvelope, 0.0f, 0.0f, 1.0f, 1000.0f);
+	initADSR(&filterEnvelope, 10000.0f, 0.0f, 1.0f, 1000.0f);
 
 	level = 0.1;
 
@@ -134,6 +136,18 @@ void USART2_IRQHandler()
 		if (messageCounter > 2) {
 			if (midiMessage[0] > 175) {
 				switch (midiMessage[1]){
+					case 63:
+						setAttack(&filterEnvelope, midiMessage[2]*5000);
+						break;
+					case 64:
+						setDecay(&filterEnvelope, midiMessage[2]*5000);
+						break;
+					case 65:
+						setSustain(&filterEnvelope, (float)midiMessage[2] / 127.0f);
+						break;
+					case 66:
+						setRelease(&filterEnvelope, midiMessage[2]*5000);
+						break;
 					case 67:
 						setAttack(&ampEnvelope, midiMessage[2]*5000);
 						break;
@@ -146,11 +160,14 @@ void USART2_IRQHandler()
 					case 70:
 						setRelease(&ampEnvelope, midiMessage[2]*5000);
 						break;
+					case 71:
+						filterEnvelopeDepth = ((float)midiMessage[2] / 127.0f) * 12000.f;
+						break;
 					case 72:
 						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
 						break;
 					case 73:
-						setFrequency(&filter,((float)midiMessage[2] / 127.0f) * 12000.f);
+						frequency = ((float)midiMessage[2] / 127.0f) * 12000.f;
 						break;
 					case 74:
 						setResonance(&filter,((float)midiMessage[2] / 127.0f) * 4.0f);
@@ -172,6 +189,7 @@ void USART2_IRQHandler()
 			} else if (midiMessage[0] > 143) {
 				headPos = addNote(midiMessage[1], notes, NOTES);
 				setADSROn(&ampEnvelope, &notes[headPos].state);
+				notes[headPos].state = 0;
 				setADSROn(&filterEnvelope, &notes[headPos].state);
 				GPIO_SetBits(GPIOD, GPIO_Pin_15);
 			} else if (midiMessage[0] < 144) {
@@ -209,6 +227,10 @@ inline void fillInBuffer() {
 			(vibratoAmount * lfo1_value) + 12.41f);
 		sample += sawtooth(osc2_phase, phaseIncrement) * getADSRLevel(&ampEnvelope);
 		incrementPhase(&osc2_phase, phaseIncrement);
+
+		setFrequency(&filter,
+								 frequency
+								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope)));
 
 		filterSample(&filter, &sample);
 		runADSR(&ampEnvelope, &notes[headPos].state);

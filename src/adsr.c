@@ -6,7 +6,7 @@ void initADSR(struct ADSR* adsr, unsigned a, unsigned d, float s, unsigned r){
 	adsr->sustainLevel = s;
 	adsr->releaseTime = r;
 	adsr->index = 0;
-	adsr->level = 0.00000000001;
+	adsr->level = 0.00000000001f;
 	adsr->offLevel = 0;
 }
 
@@ -27,7 +27,7 @@ void setRelease(struct ADSR* adsr, unsigned r){
 void setADSROn(struct ADSR* adsr, int* on){
 	if (!*on) {
 		adsr->index = 0;
-		adsr->level = 0.00000000001;
+		adsr->level = 0.00000000001f;
 		adsr->offLevel = 0;
 		*on = 1;
 	}
