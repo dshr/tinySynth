@@ -16,12 +16,15 @@ struct Filter {
 	float y_c;
 	float y_d;
 	float y_d_1;
+
+	float oversamplingCoefficients[13];
+	float oversamplingFilter[13];
 };
 
 void fillInTanhLookUpTable();
 float polytan(float x);
 float polyexp(float x);
-float polytanhf(float x);
+float tanhfLookUp(float x);
 void initFilter(struct Filter* filter, float f, float r, float d);
 void setFrequency(struct Filter* filter, float f);
 void setResonance(struct Filter* filter, float r);

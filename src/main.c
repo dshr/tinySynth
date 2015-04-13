@@ -213,7 +213,7 @@ inline void fillInBuffer() {
 
 	while (offBufferIndex < BUFFER_LENGTH)
 	{
-		sample = 0;
+		sample = 0.0f;
 		// run LFO's
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
@@ -226,7 +226,7 @@ inline void fillInBuffer() {
 
 		phaseIncrement = getPhaseIncrementFromMIDI(notes[headPos].pitch +
 			(vibratoAmount * lfo1_value) + 12.41f);
-		sample += sawtooth(osc2_phase, phaseIncrement) * getADSRLevel(&ampEnvelope);
+		sample += sawtooth(osc2_phase, phaseIncrement);
 		incrementPhase(&osc2_phase, phaseIncrement);
 
 		setFrequency(&filter,
@@ -234,12 +234,14 @@ inline void fillInBuffer() {
 								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope))
 								 + (tracking * getInterpolatedValue(notes[headPos].pitch, mtof)));
 
+		sample *= 0.5f;
 		filterSample(&filter, &sample);
+
+		sample *= level * getADSRLevel(&ampEnvelope);
+		sample *= AMPLITUDE;
+
 		runADSR(&ampEnvelope, &notes[headPos].state);
 		runADSR(&filterEnvelope, &notes[headPos].state);
-
-		sample *= level * 0.5f;
-		sample *= AMPLITUDE;
 
 		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;
@@ -268,6 +270,17 @@ inline float polyBlep(float phase, float phaseIncrement) {
 }
 
 inline float getPhaseIncrementFromMIDI(float note){
+	if (note > 127.0f) {
+		int difference = note - 127;
+		int octaves = (difference / 12) + 1;
+		return getInterpolatedValue(note - (12.0f * octaves), mtof)
+																* 2 * octaves * samplingPeriod;
+	}
+	if (note < 0.0f) {
+		int octaves = ((note / 12) + 1) * -1;
+		return getInterpolatedValue(note + (12.0f * octaves), mtof)
+																* 0.5f * octaves * samplingPeriod;
+	}
 	return getInterpolatedValue(note, mtof) * samplingPeriod;
 }
 
