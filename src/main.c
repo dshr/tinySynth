@@ -15,6 +15,7 @@ float lfo1_frequency;
 
 struct Note notes[NOTES];
 int headPos = 0;
+float tracking = 1.0f;
 float osc1_phase;
 float osc2_phase;
 float osc3_phase;
@@ -161,7 +162,7 @@ void USART2_IRQHandler()
 						setRelease(&ampEnvelope, midiMessage[2]*5000);
 						break;
 					case 71:
-						filterEnvelopeDepth = ((float)midiMessage[2] / 127.0f) * 12000.f;
+						filterEnvelopeDepth = (((float)midiMessage[2] - 64.0f) / 64.0f) * 12000.f;
 						break;
 					case 72:
 						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
@@ -230,7 +231,8 @@ inline void fillInBuffer() {
 
 		setFrequency(&filter,
 								 frequency
-								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope)));
+								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope))
+								 + (tracking * getInterpolatedValue(notes[headPos].pitch, mtof)));
 
 		filterSample(&filter, &sample);
 		runADSR(&ampEnvelope, &notes[headPos].state);
