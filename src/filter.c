@@ -21,7 +21,6 @@ inline void initFilter(struct Filter* filter, float f, float r, float d) {
 
 	setFrequency(filter, f);
 	setResonance(filter, r);
-	setDrive(filter, d);
 
 	filter->oversamplingCoefficients[0] = 4.01230529e-03f;
 	filter->oversamplingCoefficients[1] = -2.19517848e-18f;
@@ -74,19 +73,12 @@ void setResonance(struct Filter* filter, float r) {
 	filter->resonance = r;
 }
 
-void setDrive(struct Filter* filter, float d) {
-	if (d > 20.0f) d = 20.0f;
-	if (d < 0.05f) d = 0.05f;
-	filter->drive = d;
-}
-
 void filterSample(struct Filter* f, float* sample) {
 	int i, j;
 	float s = *sample;
 
 	for (i = 0; i < OVERSAMPLING; i++) {
 		if (i > 0) s = 0.0f;
-		// s = tanhfLookUp(s * f->drive);
 		f->y_a = f->y_a + f->g *
 			(tanhfLookUp(s - f->resonance *
 				((f->y_d_1 + f->y_d)*0.5f) - tanhfLookUp(f->y_a)));

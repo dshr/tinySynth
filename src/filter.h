@@ -9,7 +9,6 @@ struct Filter {
 	float frequency;
 	float g;
 	float resonance;
-	float drive;
 
 	float y_a;
 	float y_b;
@@ -28,7 +27,6 @@ float tanhfLookUp(float x);
 void initFilter(struct Filter* filter, float f, float r, float d);
 void setFrequency(struct Filter* filter, float f);
 void setResonance(struct Filter* filter, float r);
-void setDrive(struct Filter* filter, float d);
 
 void filterSample(struct Filter* filter, float* samples);
 #endif

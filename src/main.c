@@ -165,7 +165,7 @@ void USART2_IRQHandler()
 						filterEnvelopeDepth = (((float)midiMessage[2] - 64.0f) / 64.0f) * 12000.f;
 						break;
 					case 72:
-						setDrive(&filter,((float)midiMessage[2] / 127.0f) * 20.0f);
+						tracking = (float)midiMessage[2] / 127.0f;
 						break;
 					case 73:
 						frequency = ((float)midiMessage[2] / 127.0f) * 12000.f;
