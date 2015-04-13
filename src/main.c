@@ -147,7 +147,7 @@ void USART2_IRQHandler()
 						setSustain(&filterEnvelope, (float)midiMessage[2] / 127.0f);
 						break;
 					case 66:
-						setRelease(&filterEnvelope, midiMessage[2]*5000);
+						setRelease(&filterEnvelope, midiMessage[2]*50000);
 						break;
 					case 67:
 						setAttack(&ampEnvelope, midiMessage[2]*5000);
@@ -159,7 +159,7 @@ void USART2_IRQHandler()
 						setSustain(&ampEnvelope, (float)midiMessage[2] / 127.0f);
 						break;
 					case 70:
-						setRelease(&ampEnvelope, midiMessage[2]*5000);
+						setRelease(&ampEnvelope, midiMessage[2]*50000);
 						break;
 					case 71:
 						filterEnvelopeDepth = (((float)midiMessage[2] - 64.0f) / 64.0f) * 12000.f;

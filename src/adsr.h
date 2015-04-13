@@ -7,9 +7,10 @@ struct ADSR {
 	unsigned decayTime;
 	float sustainLevel;
 	unsigned releaseTime;
+	float decayMultiplier;
+	float releaseMultiplier;
 	unsigned index;
 	float level;
-	float offLevel;
 };
 
 void initADSR(struct ADSR* adsr, unsigned a, unsigned d, float s, unsigned r);
