@@ -23,6 +23,7 @@ float pitch = 69.0f;
 int portamentoCounter = 0;
 int portamento = 3000;
 float portamentoModifier;
+float pitchBend = 0.0f;
 struct ADSR ampEnvelope;
 struct Filter filter;
 struct ADSR filterEnvelope;
@@ -131,7 +132,8 @@ void USART2_IRQHandler()
 		int message = USART_ReceiveData(USART2);
 		if (messageCounter == 0 &&
 				((message > 127 && message < 160) ||
-				 (message > 175 && message < 192))) {
+				 (message > 175 && message < 192)	||
+				 (message > 223 && message < 240)))  {
 			midiMessage[messageCounter] = message;
 			messageCounter++;
 		} else if (messageCounter > 0) {
@@ -139,7 +141,9 @@ void USART2_IRQHandler()
 			messageCounter++;
 		}
 		if (messageCounter > 2) {
-			if (midiMessage[0] > 175) {
+			if (midiMessage[0] > 223) {
+				pitchBend = (midiMessage[2] * 128 + midiMessage[1] - 8192) * 0.00006103515f * 24.0f;
+			} else if (midiMessage[0] > 175) {
 				switch (midiMessage[1]){
 					case 63:
 						setAttack(&filterEnvelope, midiMessage[2]*5000);
@@ -236,12 +240,12 @@ inline void fillInBuffer() {
 		pitch += portamentoModifier;
 		portamentoCounter++;
 
-		phaseIncrement = getPhaseIncrementFromMIDI(pitch +
+		phaseIncrement = getPhaseIncrementFromMIDI(pitch + pitchBend +
 			(vibratoAmount * lfo1_value) + 0.41f);
 		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value) * getADSRLevel(&ampEnvelope);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(pitch +
+		phaseIncrement = getPhaseIncrementFromMIDI(pitch + pitchBend +
 			(vibratoAmount * lfo1_value) + 12.41f);
 		sample += sawtooth(osc2_phase, phaseIncrement);
 		incrementPhase(&osc2_phase, phaseIncrement);
@@ -249,7 +253,7 @@ inline void fillInBuffer() {
 		setFrequency(&filter,
 								 frequency
 								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope))
-								 + (tracking * getInterpolatedValue(pitch, mtof)));
+								 + (tracking * getInterpolatedValue(pitch + pitchBend, mtof)));
 
 		sample *= 0.5f;
 		filterSample(&filter, &sample);
