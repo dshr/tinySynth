@@ -23,7 +23,7 @@ struct Filter {
 void fillInTanhLookUpTable();
 float polytan(float x);
 float polyexp(float x);
-float tanhfLookUp(float x);
+float tanhLookUp(float x);
 void initFilter(struct Filter* filter, float f, float r, float d);
 void setFrequency(struct Filter* filter, float f);
 void setResonance(struct Filter* filter, float r);

@@ -54,7 +54,7 @@ inline float polyexp(float x) {
 					 + (0.04166666667f * x * x * x * x);
 }
 
-inline float tanhfLookUp(float x) {
+inline float tanhLookUp(float x) {
 	if (x >= 3.0f) return 0.99f;
 	if (x <= -3.0f) return -0.99f;
 	return getInterpolatedValue((x + 3.0f) * 1000.0f, tanhLookUpTable);
@@ -80,14 +80,14 @@ void filterSample(struct Filter* f, float* sample) {
 	for (i = 0; i < OVERSAMPLING; i++) {
 		if (i > 0) s = 0.0f;
 		f->y_a = f->y_a + f->g *
-			(tanhfLookUp(s - f->resonance *
-				((f->y_d_1 + f->y_d)*0.5f) - tanhfLookUp(f->y_a)));
-		f->y_b = f->y_b + f->g * (tanhfLookUp(f->y_a) - tanhfLookUp(f->y_b));
-		f->y_c = f->y_c + f->g * (tanhfLookUp(f->y_b) - tanhfLookUp(f->y_c));
+			(tanhLookUp(s - f->resonance *
+				((f->y_d_1 + f->y_d)*0.5f) - tanhLookUp(f->y_a)));
+		f->y_b = f->y_b + f->g * (tanhLookUp(f->y_a) - tanhLookUp(f->y_b));
+		f->y_c = f->y_c + f->g * (tanhLookUp(f->y_b) - tanhLookUp(f->y_c));
 
 		f->y_d_1 = f->y_d;
 
-		f->y_d = f->y_d + f->g * (tanhfLookUp(f->y_c) - tanhfLookUp(f->y_d));
+		f->y_d = f->y_d + f->g * (tanhLookUp(f->y_c) - tanhLookUp(f->y_d));
 
 		f->oversamplingFilter[0] = f->y_d;
 		s = 0.0f;

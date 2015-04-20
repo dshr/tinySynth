@@ -19,6 +19,10 @@ float tracking = 1.0f;
 float osc1_phase;
 float osc2_phase;
 float osc3_phase;
+float pitch = 69.0f;
+int portamentoCounter = 0;
+int portamento = 3000;
+float portamentoModifier;
 struct ADSR ampEnvelope;
 struct Filter filter;
 struct ADSR filterEnvelope;
@@ -79,7 +83,7 @@ int main(){
 	initADSR(&ampEnvelope, 0.0f, 0.0f, 1.0f, 1000.0f);
 	initADSR(&filterEnvelope, 10000.0f, 0.0f, 1.0f, 1000.0f);
 
-	level = 0.1;
+	level = 0.1f;
 
 	fillInBuffer();
 	swapBuffers();
@@ -193,13 +197,19 @@ void USART2_IRQHandler()
 				notes[headPos].state = 0;
 				setADSROn(&filterEnvelope, &notes[headPos].state);
 				GPIO_SetBits(GPIOD, GPIO_Pin_15);
+				portamentoModifier = (notes[headPos].pitch - pitch) / (float) portamento;
+				portamentoCounter = 0;
 			} else if (midiMessage[0] < 144) {
 				headPos = removeNote(midiMessage[1], notes, NOTES);
 				if (!notes[headPos].state) {
 					setADSROff(&ampEnvelope);
 					setADSROff(&filterEnvelope);
+				} else {
+					portamentoModifier = (notes[headPos].pitch - pitch) / (float) portamento;
+					portamentoCounter = 0;
 				}
 				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+
 			}
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
 			messageCounter = 0;
@@ -218,13 +228,20 @@ inline void fillInBuffer() {
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
+		if (portamentoCounter >= portamento) {
+			portamentoModifier = 0.0f;
+			pitch = notes[headPos].pitch;
+		}
 
-		phaseIncrement = getPhaseIncrementFromMIDI(notes[headPos].pitch +
+		pitch += portamentoModifier;
+		portamentoCounter++;
+
+		phaseIncrement = getPhaseIncrementFromMIDI(pitch +
 			(vibratoAmount * lfo1_value) + 0.41f);
 		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value) * getADSRLevel(&ampEnvelope);
 		incrementPhase(&osc1_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(notes[headPos].pitch +
+		phaseIncrement = getPhaseIncrementFromMIDI(pitch +
 			(vibratoAmount * lfo1_value) + 12.41f);
 		sample += sawtooth(osc2_phase, phaseIncrement);
 		incrementPhase(&osc2_phase, phaseIncrement);
@@ -232,7 +249,7 @@ inline void fillInBuffer() {
 		setFrequency(&filter,
 								 frequency
 								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope))
-								 + (tracking * getInterpolatedValue(notes[headPos].pitch, mtof)));
+								 + (tracking * getInterpolatedValue(pitch, mtof)));
 
 		sample *= 0.5f;
 		filterSample(&filter, &sample);
