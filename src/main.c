@@ -12,13 +12,24 @@ float buffer2[BUFFER_LENGTH];
 
 float lfo1_phase;
 float lfo1_frequency;
+float lfo1_pulseWidthModAmount;
+float lfo1_vibratoAmount;
+
+float lfo2_phase;
+float lfo2_frequency;
+float lfo2_vibratoAmount;
+float lfo2_filterModAmount;
 
 struct Note notes[NOTES];
 int headPos = 0;
 float tracking = 1.0f;
-float osc1_phase;
-float osc2_phase;
-float osc3_phase;
+
+float osc_phase[3];
+float osc_volume[3];
+int osc_coarse[3];
+float osc_fine[3];
+int osc_waveform[3];
+
 float pitch = 69.0f;
 int portamentoCounter = 0;
 int portamento = 3000;
@@ -31,8 +42,6 @@ float frequency;
 float filterEnvelopeDepth = 2000.0f;
 
 float level;
-float pulseWidthModAmount;
-float vibratoAmount;
 
 int currentBufferIndex;
 int offBufferIndex;
@@ -78,6 +87,14 @@ int main(){
 
 	for (i = 0; i < NOTES; i++) {
 		initNote(&notes[i], NOTES);
+	}
+
+	for (i = 0; i < 3; i++) {
+		osc_phase[i] = 0.0f;
+		osc_volume[i] = 1.0f;
+		osc_coarse[i] = 0.0f;
+		osc_fine[i] = 0.0f;
+		osc_waveform[i] = 127;
 	}
 
 	initFilter(&filter, 2000.0f, 0.0f, 4.0f);
@@ -145,6 +162,54 @@ void USART2_IRQHandler()
 				pitchBend = (midiMessage[2] * 128 + midiMessage[1] - 8192) * 0.00006103515f * 24.0f;
 			} else if (midiMessage[0] > 175) {
 				switch (midiMessage[1]){
+					case 47:
+						osc_volume[0] = (float)midiMessage[2] / 127.0f;
+						break;
+					case 48:
+						osc_coarse[0] = (((float)midiMessage[2] / 63.0f) - 1.0f) * 24;
+						break;
+					case 49:
+						osc_fine[0] = ((float)midiMessage[2] / 63.0f) - 1.0f;
+						break;
+					case 50:
+						osc_waveform[0] = midiMessage[2];
+						break;
+					case 51:
+						osc_volume[1] = (float)midiMessage[2] / 127.0f;
+						break;
+					case 52:
+						osc_coarse[1] = (((float)midiMessage[2] / 63.0f) - 1.0f) * 24;
+						break;
+					case 53:
+						osc_fine[1] = ((float)midiMessage[2] / 63.0f) - 1.0f;
+						break;
+					case 54:
+						osc_waveform[1] = midiMessage[2];
+						break;
+					case 55:
+						osc_volume[2] = (float)midiMessage[2] / 127.0f;
+						break;
+					case 56:
+						osc_coarse[2] = (((float)midiMessage[2] / 63.0f) - 1.0f) * 24;
+						break;
+					case 57:
+						osc_fine[2] = ((float)midiMessage[2] / 63.0f) - 1.0f;
+						break;
+					case 58:
+						osc_waveform[2] = midiMessage[2];
+						break;
+					case 59:
+						portamento = ((float)midiMessage[2] / 127.0f) * 10000;
+						break;
+					case 60:
+						lfo2_frequency = (float)midiMessage[2] / 12.0f;
+						break;
+					case 61:
+						lfo2_vibratoAmount = (float)midiMessage[2] / 127.0f;
+						break;
+					case 62:
+						lfo2_filterModAmount = ((float)midiMessage[2] / 127.0f) * 12000.0f;
+						break;
 					case 63:
 						setAttack(&filterEnvelope, midiMessage[2]*5000);
 						break;
@@ -182,10 +247,10 @@ void USART2_IRQHandler()
 						setResonance(&filter,((float)midiMessage[2] / 127.0f) * 4.0f);
 						break;
 					case 75:
-						pulseWidthModAmount = (float)midiMessage[2] / 127.0f;
+						lfo1_pulseWidthModAmount = (float)midiMessage[2] / 127.0f;
 						break;
 					case 76:
-						vibratoAmount = (float)midiMessage[2] / 127.0f;
+						lfo1_vibratoAmount = (float)midiMessage[2] / 127.0f;
 						break;
 					case 77:
 						lfo1_frequency = (float)midiMessage[2] / 12.0f;
@@ -222,8 +287,9 @@ void USART2_IRQHandler()
 }
 
 inline void fillInBuffer() {
-	GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-	float sample, phaseIncrement, lfo1_value;
+	GPIO_ResetBits(GPIOD, GPIO_Pin_14);
+	float sample, phaseIncrement, lfo1_value, lfo2_value;
+	int i;
 
 	while (offBufferIndex < BUFFER_LENGTH)
 	{
@@ -232,6 +298,10 @@ inline void fillInBuffer() {
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
+		phaseIncrement = getPhaseIncrementFromFrequency(lfo2_frequency);
+		lfo2_value = sine(lfo2_phase, phaseIncrement);
+		incrementPhase(&lfo2_phase, phaseIncrement);
+
 		if (portamentoCounter >= portamento) {
 			portamentoModifier = 0.0f;
 			pitch = notes[headPos].pitch;
@@ -240,22 +310,28 @@ inline void fillInBuffer() {
 		pitch += portamentoModifier;
 		portamentoCounter++;
 
-		phaseIncrement = getPhaseIncrementFromMIDI(pitch + pitchBend +
-			(vibratoAmount * lfo1_value) + 0.41f);
-		sample += square(osc1_phase, phaseIncrement, pulseWidthModAmount * lfo1_value) * getADSRLevel(&ampEnvelope);
-		incrementPhase(&osc1_phase, phaseIncrement);
-
-		phaseIncrement = getPhaseIncrementFromMIDI(pitch + pitchBend +
-			(vibratoAmount * lfo1_value) + 12.41f);
-		sample += sawtooth(osc2_phase, phaseIncrement);
-		incrementPhase(&osc2_phase, phaseIncrement);
+		for (i = 0; i < 3; i++)
+		{
+			phaseIncrement = getPhaseIncrementFromMIDI(pitch + pitchBend +
+				(lfo1_vibratoAmount * lfo1_value) + (lfo2_vibratoAmount * lfo2_value)
+				+ osc_coarse[i] + osc_fine[i]);
+			if (osc_waveform[i] > 84) {
+				sample += osc_volume[i] * square(osc_phase[i], phaseIncrement, lfo1_pulseWidthModAmount * lfo1_value);
+			} else if (osc_waveform[i] > 42) {
+				sample += osc_volume[i] * sawtooth(osc_phase[i], phaseIncrement);
+			} else {
+				sample += osc_volume[i] * sine(osc_phase[i], phaseIncrement);
+			}
+			incrementPhase(&osc_phase[i], phaseIncrement);
+		}
 
 		setFrequency(&filter,
 								 frequency
 								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope))
+								 + (lfo2_filterModAmount * lfo2_value)
 								 + (tracking * getInterpolatedValue(pitch + pitchBend, mtof)));
 
-		sample *= 0.5f;
+		sample *= 0.33f;
 		filterSample(&filter, &sample);
 
 		sample *= level * getADSRLevel(&ampEnvelope);
@@ -267,6 +343,7 @@ inline void fillInBuffer() {
 		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;
 	}
+	GPIO_SetBits(GPIOD, GPIO_Pin_14);
 }
 
 inline void swapBuffers() {
