@@ -1,41 +1,62 @@
 #include "main.h"
 
-#define PI 3.14159265f
-#define SEMITONE 1.0594630943592953
-#define BUFFER_LENGTH 2
-#define SAMPLING_FREQ 48000
-
-#define AMPLITUDE 32000
-#define A_FOUR 440.0f
+//
+// The PolyBLEP generation is adapter from the addendum of Phaseshaping
+// oscillator algorithms for musical sound synthesis by
+// Kleimola J., Lazzarini V., Timoney J., and Välimäki, V.
+//
+// http://research.spa.aalto.fi/publications/papers/smc2010-phaseshaping/
+// accessed on 13.12.2014
+//
 
 float samplingPeriod;
 float mtof[128];
 float sineWaveTable[513];
 
-int16_t *currentBuffer;
-int16_t *offBuffer;
+float *currentBuffer;
+float *offBuffer;
 
-int16_t buffer1[BUFFER_LENGTH];
-int16_t buffer2[BUFFER_LENGTH];
-
-float osc1_phase;
-float osc1_note;
-
-float osc2_phase;
-float osc2_note;
-
-float osc3_phase;
-float osc3_note;
+float buffer1[BUFFER_LENGTH];
+float buffer2[BUFFER_LENGTH];
 
 float lfo1_phase;
 float lfo1_frequency;
-float lfo1_depth;
+float lfo1_pulseWidthModAmount;
+float lfo1_vibratoAmount;
 
-struct ADSR adsr1;
-int adsr1_on;
+float lfo2_phase;
+float lfo2_frequency;
+float lfo2_vibratoAmount;
+float lfo2_filterModAmount;
+
+struct Note notes[NOTES];
+int headPos = 0;
+float tracking = 1.0f;
+
+float osc_phase[3];
+float osc_volume[3];
+int osc_coarse[3];
+float osc_fine[3];
+int osc_waveform[3];
+
+float pitch = 69.0f;
+int portamentoCounter = 0;
+int portamento = 3000;
+float portamentoModifier;
+float pitchBend = 0.0f;
+struct ADSR ampEnvelope;
+struct Filter filter;
+struct ADSR filterEnvelope;
+float frequency;
+float filterEnvelopeDepth = 2000.0f;
+
+float level;
 
 int currentBufferIndex;
 int offBufferIndex;
+
+int messageCounter;
+int midiMessage[3];
 
 int main(){
 
@@ -43,21 +64,16 @@ int main(){
 	setupClocks();
 	setupGPIO();
 
-	currentBuffer = &buffer1;
-	offBuffer = &buffer2;
+	currentBuffer = buffer1;
+	offBuffer = buffer2;
 
 	currentBufferIndex = 0;
 	offBufferIndex = 0;
 
-	osc1_phase = 0.0f;
-
-	osc2_phase = 0.0f;
-
-	osc3_phase = 0.0f;
+	messageCounter = 0;
 
 	lfo1_phase = 0.0f;
-	lfo1_frequency = 2.0f;
-	lfo1_depth = 0.0f;
+	lfo1_frequency = 0.5f;
 
 	samplingPeriod = (float) 1 / SAMPLING_FREQ;
 
@@ -65,10 +81,10 @@ int main(){
 	int i;
 	mtof[69] = A_FOUR;
 	for (i = 70; i < 128; i++){
-		mtof[i] = (float) SEMITONE * mtof[i-1];
+		mtof[i] = SEMITONE * mtof[i-1];
 	}
 	for (i = 68; i >= 0; i--){
-		mtof[i] = (float) mtof[i+1] / SEMITONE;
+		mtof[i] = mtof[i+1] / SEMITONE;
 	}
 
 	// fill in the sine wavetable
@@ -76,149 +92,42 @@ int main(){
 		sineWaveTable[i] = cosf(2 * PI * i/512);
 	}
 
-	GPIO_SetBits(GPIOD, GPIO_Pin_12);
+	fillInTanhLookUpTable();
+
+	for (i = 0; i < NOTES; i++) {
+		initNote(&notes[i], NOTES);
+	}
+
+	for (i = 0; i < 3; i++) {
+		osc_phase[i] = 0.0f;
+		osc_volume[i] = 1.0f;
+		osc_coarse[i] = 0.0f;
+		osc_fine[i] = 0.0f;
+		osc_waveform[i] = 127;
+	}
+
+	initFilter(&filter, 2000.0f, 0.0f, 4.0f);
+	initADSR(&ampEnvelope, 0.0f, 0.0f, 1.0f, 1000.0f);
+	initADSR(&filterEnvelope, 10000.0f, 0.0f, 1.0f, 1000.0f);
+
+	level = 0.1f;
+
 	fillInBuffer();
 	swapBuffers();
-	GPIO_SetBits(GPIOD, GPIO_Pin_13);
 
-	setupADC();
 	setupI2C();
 	setupCS32L22();
 	setupIRC();
 	setupI2S();
+	setupUSART();
 
-	initADSR(&adsr1, 1000, 1000, 0.8, 60000);
-	adsr1_on = 0;
-	setADSROff(&adsr1, &adsr1_on);
-
+	GPIO_SetBits(GPIOD, GPIO_Pin_12);
+	i = 0;
 	while(1){
 		if (offBufferIndex == 0) {
 			fillInBuffer();
 		}
-
-		lfo1_depth = 0;//(float) getADCValue() / 4096.0;
-
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_7) == 1){
-			osc1_note = 60;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_7) == 0){
-			if (osc1_note == 60){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_8) == 1){
-			osc1_note = 61;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_8) == 0){
-			if (osc1_note == 61){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_9) == 1){
-			osc1_note = 62;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_9) == 0){
-			if (osc1_note == 62){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_10) == 1){
-			osc1_note = 63;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_10) == 0){
-			if (osc1_note == 63){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_11) == 1){
-			osc1_note = 64;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_11) == 0){
-			if (osc1_note == 64){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_12) == 1){
-			osc1_note = 65;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_12) == 0){
-			if (osc1_note == 65){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_13) == 1){
-			osc1_note = 66;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_13) == 0){
-			if (osc1_note == 66){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_14) == 1){
-			osc1_note = 67;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_14) == 0){
-			if (osc1_note == 67){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_15) == 1){
-			osc1_note = 68;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_15) == 0){
-			if (osc1_note == 68){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_10) == 1){
-			osc1_note = 69;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_10) == 0){
-			if (osc1_note == 69){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
-		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_11) == 1){
-			osc1_note = 70;
-			setADSROn(&adsr1, &adsr1_on);
-			GPIO_SetBits(GPIOD, GPIO_Pin_15);
-		}
-		if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_11) == 0){
-			if (osc1_note == 70){
-				setADSROff(&adsr1, &adsr1_on);
-				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
-			}
-		}
+		GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0); // this is weird, stuff breaks without this :(
 	}
 	return 0;
 }
@@ -228,67 +137,239 @@ void SPI3_IRQHandler()
 	if (SPI_I2S_GetFlagStatus(SPI3, SPI_FLAG_TXE))
 	{
 		int16_t sample;
-		sample = currentBuffer[currentBufferIndex/2];
+		sample = (int16_t) currentBuffer[currentBufferIndex/2];
 		SPI_I2S_SendData(SPI3, sample);
 		currentBufferIndex++;
 		if (currentBufferIndex == BUFFER_LENGTH*2){
 			GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-			swapBuffers();
+			float* temp = currentBuffer;
+			currentBuffer = offBuffer;
+			offBuffer = temp;
+			currentBufferIndex = 0;
+			offBufferIndex = 0;
+		}
+	}
+}
+
+void USART2_IRQHandler()
+{
+	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE))
+	{
+		int message = USART_ReceiveData(USART2);
+		if (messageCounter == 0 &&
+				((message > 127 && message < 160) ||
+				 (message > 175 && message < 192)	||
+				 (message > 223 && message < 240)))  {
+			midiMessage[messageCounter] = message;
+			messageCounter++;
+		} else if (messageCounter > 0) {
+			midiMessage[messageCounter] = message;
+			messageCounter++;
+		}
+		if (messageCounter > 2) {
+			if (midiMessage[0] > 223) {
+				pitchBend = (midiMessage[2] * 128 + midiMessage[1] - 8192) * 0.00006103515f * 24.0f;
+			} else if (midiMessage[0] > 175) {
+				switch (midiMessage[1]){
+					case 47:
+						osc_volume[0] = (float)midiMessage[2] / 127.0f;
+						break;
+					case 48:
+						osc_coarse[0] = (((float)midiMessage[2] / 63.0f) - 1.0f) * 24;
+						break;
+					case 49:
+						osc_fine[0] = ((float)midiMessage[2] / 63.0f) - 1.0f;
+						break;
+					case 50:
+						osc_waveform[0] = midiMessage[2];
+						break;
+					case 51:
+						osc_volume[1] = (float)midiMessage[2] / 127.0f;
+						break;
+					case 52:
+						osc_coarse[1] = (((float)midiMessage[2] / 63.0f) - 1.0f) * 24;
+						break;
+					case 53:
+						osc_fine[1] = ((float)midiMessage[2] / 63.0f) - 1.0f;
+						break;
+					case 54:
+						osc_waveform[1] = midiMessage[2];
+						break;
+					case 55:
+						osc_volume[2] = (float)midiMessage[2] / 127.0f;
+						break;
+					case 56:
+						osc_coarse[2] = (((float)midiMessage[2] / 63.0f) - 1.0f) * 24;
+						break;
+					case 57:
+						osc_fine[2] = ((float)midiMessage[2] / 63.0f) - 1.0f;
+						break;
+					case 58:
+						osc_waveform[2] = midiMessage[2];
+						break;
+					case 59:
+						portamento = ((float)midiMessage[2] / 127.0f) * 10000;
+						break;
+					case 60:
+						lfo2_frequency = (float)midiMessage[2] / 12.0f;
+						break;
+					case 61:
+						lfo2_vibratoAmount = (float)midiMessage[2] / 127.0f;
+						break;
+					case 62:
+						lfo2_filterModAmount = ((float)midiMessage[2] / 127.0f) * 12000.0f;
+						break;
+					case 63:
+						setAttack(&filterEnvelope, midiMessage[2]*5000);
+						break;
+					case 64:
+						setDecay(&filterEnvelope, midiMessage[2]*5000);
+						break;
+					case 65:
+						setSustain(&filterEnvelope, (float)midiMessage[2] / 127.0f);
+						break;
+					case 66:
+						setRelease(&filterEnvelope, midiMessage[2]*50000);
+						break;
+					case 67:
+						setAttack(&ampEnvelope, midiMessage[2]*5000);
+						break;
+					case 68:
+						setDecay(&ampEnvelope, midiMessage[2]*5000);
+						break;
+					case 69:
+						setSustain(&ampEnvelope, (float)midiMessage[2] / 127.0f);
+						break;
+					case 70:
+						setRelease(&ampEnvelope, midiMessage[2]*50000);
+						break;
+					case 71:
+						filterEnvelopeDepth = (((float)midiMessage[2] - 64.0f) / 64.0f) * 12000.f;
+						break;
+					case 72:
+						tracking = (float)midiMessage[2] / 127.0f;
+						break;
+					case 73:
+						frequency = ((float)midiMessage[2] / 127.0f) * 12000.f;
+						break;
+					case 74:
+						setResonance(&filter,((float)midiMessage[2] / 127.0f) * 4.0f);
+						break;
+					case 75:
+						lfo1_pulseWidthModAmount = (float)midiMessage[2] / 127.0f;
+						break;
+					case 76:
+						lfo1_vibratoAmount = (float)midiMessage[2] / 127.0f;
+						break;
+					case 77:
+						lfo1_frequency = (float)midiMessage[2] / 12.0f;
+						break;
+					case 78:
+						level = (float)midiMessage[2] / 127.0f;
+						break;
+					default: break;
+				}
+			} else if (midiMessage[0] > 143) {
+				headPos = addNote(midiMessage[1], notes, NOTES);
+				setADSROn(&ampEnvelope, &notes[headPos].state);
+				notes[headPos].state = 0;
+				setADSROn(&filterEnvelope, &notes[headPos].state);
+				GPIO_SetBits(GPIOD, GPIO_Pin_15);
+				portamentoModifier = (notes[headPos].pitch - pitch) / (float) portamento;
+				portamentoCounter = 0;
+			} else if (midiMessage[0] < 144) {
+				headPos = removeNote(midiMessage[1], notes, NOTES);
+				if (!notes[headPos].state) {
+					setADSROff(&ampEnvelope);
+					setADSROff(&filterEnvelope);
+				} else {
+					portamentoModifier = (notes[headPos].pitch - pitch) / (float) portamento;
+					portamentoCounter = 0;
+				}
+				GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+
+			}
+			GPIO_ToggleBits(GPIOD, GPIO_Pin_13);
+			messageCounter = 0;
 		}
 	}
 }
 
 inline void fillInBuffer() {
-	GPIO_ToggleBits(GPIOD, GPIO_Pin_14);
-	float sample, phaseIncrement, lfo1_value;
+	GPIO_ResetBits(GPIOD, GPIO_Pin_14);
+	float sample, phaseIncrement, lfo1_value, lfo2_value;
+	int i;
 
 	while (offBufferIndex < BUFFER_LENGTH)
 	{
-		sample = 0;
-
+		sample = 0.0f;
 		// run LFO's
 		phaseIncrement = getPhaseIncrementFromFrequency(lfo1_frequency);
 		lfo1_value = sine(lfo1_phase, phaseIncrement);
 		incrementPhase(&lfo1_phase, phaseIncrement);
+		phaseIncrement = getPhaseIncrementFromFrequency(lfo2_frequency);
+		lfo2_value = sine(lfo2_phase, phaseIncrement);
+		incrementPhase(&lfo2_phase, phaseIncrement);
 
-		phaseIncrement = getPhaseIncrementFromMIDI(osc1_note + (6 * lfo1_depth * lfo1_value));
-		sample += sawtooth(osc1_phase, phaseIncrement);
-		// sample += square(osc1_phase, phaseIncrement, lfo1_depth * lfo1_value);
-		incrementPhase(&osc1_phase, phaseIncrement);
+		if (portamentoCounter >= portamento) {
+			portamentoModifier = 0.0f;
+			pitch = notes[headPos].pitch;
+		}
 
-		// phaseIncrement = getPhaseIncrementFromMIDI(osc2_note + (6 * lfo1_depth * lfo1_value));
-		// sample += sawtooth(osc2_phase, phaseIncrement);
-		// sample += square(osc2_phase, phaseIncrement, lfo1_depth * lfo1_value);
-		// incrementPhase(&osc2_phase, phaseIncrement);
+		pitch += portamentoModifier;
+		portamentoCounter++;
 
-		// phaseIncrement = getPhaseIncrementFromMIDI(osc3_note + (6 * lfo1_depth * lfo1_value));
-		// sample += sawtooth(osc3_phase, phaseIncrement);
-		// sample += square(osc3_phase, phaseIncrement, lfo1_depth * lfo1_value);
-		incrementPhase(&osc3_phase, phaseIncrement);
+		for (i = 0; i < 3; i++)
+		{
+			phaseIncrement = getPhaseIncrementFromMIDI(pitch + pitchBend +
+				(lfo1_vibratoAmount * lfo1_value) + (lfo2_vibratoAmount * lfo2_value)
+				+ osc_coarse[i] + osc_fine[i]);
+			if (osc_waveform[i] > 84) {
+				sample += osc_volume[i] * square(osc_phase[i], phaseIncrement, lfo1_pulseWidthModAmount * lfo1_value);
+			} else if (osc_waveform[i] > 42) {
+				sample += osc_volume[i] * sawtooth(osc_phase[i], phaseIncrement);
+			} else {
+				sample += osc_volume[i] * sine(osc_phase[i], phaseIncrement);
+			}
+			incrementPhase(&osc_phase[i], phaseIncrement);
+		}
 
-		sample *= 0.3 * AMPLITUDE * getADSRLevel(&adsr1);
+		setFrequency(&filter,
+								 frequency
+								 + (filterEnvelopeDepth * getADSRLevel(&filterEnvelope))
+								 + (lfo2_filterModAmount * lfo2_value)
+								 + (tracking * getInterpolatedValue(pitch + pitchBend, mtof)));
 
-		runADSR(&adsr1, &adsr1_on);
+		sample *= 0.33f;
+		filterSample(&filter, &sample);
 
-		offBuffer[offBufferIndex] = (int16_t) sample;
+		sample *= level * getADSRLevel(&ampEnvelope);
+		sample *= AMPLITUDE;
+
+		runADSR(&ampEnvelope, &notes[headPos].state);
+		runADSR(&filterEnvelope, &notes[headPos].state);
+
+		offBuffer[offBufferIndex] = sample;
 		offBufferIndex++;
 	}
+	GPIO_SetBits(GPIOD, GPIO_Pin_14);
 }
 
 inline void swapBuffers() {
-	int16_t* temp = currentBuffer;
+	float* temp = currentBuffer;
 	currentBuffer = offBuffer;
 	offBuffer = temp;
 	currentBufferIndex = 0;
 	offBufferIndex = 0;
 }
 
-inline float polyBlep(float phase, float phaseIncrement){
+inline float polyBlep(float phase, float phaseIncrement) {
+	float inversePhaseIncrement = 1.0f / phaseIncrement;
 	if (phase < phaseIncrement) {
-			phase /= phaseIncrement;
+			phase *= inversePhaseIncrement;
 			return phase+phase - phase*phase - 1;
 	} else if (phase > 1.0f - phaseIncrement) {
-			phase = (phase - 1.0f) / phaseIncrement;
+			phase = (phase - 1.0f) * inversePhaseIncrement;
 			return phase*phase + phase+phase + 1;
 	} else {
 		return 0.0f;
@@ -296,6 +377,17 @@ inline float polyBlep(float phase, float phaseIncrement){
 }
 
 inline float getPhaseIncrementFromMIDI(float note){
+	if (note > 127.0f) {
+		int difference = note - 127;
+		int octaves = (difference / 12) + 1;
+		return getInterpolatedValue(note - (12.0f * octaves), mtof)
+																* 2 * octaves * samplingPeriod;
+	}
+	if (note < 0.0f) {
+		int octaves = ((note / 12) + 1) * -1;
+		return getInterpolatedValue(note + (12.0f * octaves), mtof)
+																* 0.5f * octaves * samplingPeriod;
+	}
 	return getInterpolatedValue(note, mtof) * samplingPeriod;
 }
 
@@ -338,21 +430,4 @@ inline float square(float phase, float phaseIncrement, float pulseWidthMod){
 
 inline float sawtooth(float phase, float phaseIncrement){
 	return (float) 1 - 2 * phase + polyBlep(phase, phaseIncrement);
-}
-
-inline float getInterpolatedValue(float value, float* array){
-	int roundedValue = (int)value;
-	float decimalPart = value - roundedValue;
-	if (decimalPart > 0.0f){
-		float diff = array[roundedValue + 1] - array[roundedValue];
-		return array[roundedValue] + (decimalPart * diff);
-	} else {
-		return array[roundedValue];
-	}
-}
-
-inline int getADCValue(){
-	ADC_SoftwareStartConv(ADC1);
-	while(ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
-	return ADC_GetConversionValue(ADC1);
 }

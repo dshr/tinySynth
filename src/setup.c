@@ -2,17 +2,13 @@
 
 void setupClocks() {
   // enable GPIO ports A, B, C and D
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I2S WS signal
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA | //I2S WS signal and USART
    RCC_AHB1Periph_GPIOB | // I2C_SDA & I2C_SCL
    RCC_AHB1Periph_GPIOC | // I2S_MCK, I2S_SCK, I2S_SD
-   RCC_AHB1Periph_GPIOD |
-   RCC_AHB1Periph_GPIOE, ENABLE); // reset pin on the DAC
+   RCC_AHB1Periph_GPIOD, ENABLE); // reset pin on the DAC
 
   // enable the serial peripherals
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3, ENABLE);
-
-  // enable the ADC
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1 | RCC_APB1Periph_SPI3 | RCC_APB1Periph_USART2, ENABLE);
 }
 
 void setupPLL() {
@@ -58,30 +54,23 @@ void setupGPIO() {
 
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource4, GPIO_AF_SPI3);
 
-  // user buttons
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_7 | GPIO_Pin_8 |
-                             GPIO_Pin_9 | GPIO_Pin_10 |
-                             GPIO_Pin_11 | GPIO_Pin_12 |
-                             GPIO_Pin_13 | GPIO_Pin_14 |
-                             GPIO_Pin_15 ;
+  // user button
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_0;
   GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN;
   GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
-  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
-  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_Init(GPIOE, &GPIO_initStruct);
-
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_11;
-  GPIO_initStruct.GPIO_Mode = GPIO_Mode_IN;
-  GPIO_initStruct.GPIO_OType = GPIO_OType_PP;
-  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
-  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
-  GPIO_Init(GPIOB, &GPIO_initStruct);
-
-  // ADC
-  GPIO_initStruct.GPIO_Pin = GPIO_Pin_1;
-  GPIO_initStruct.GPIO_Mode = GPIO_Mode_AN;
   GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
-  GPIO_Init(GPIOC, &GPIO_initStruct);
+  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOA, &GPIO_initStruct);
+
+  // USART
+  GPIO_initStruct.GPIO_Pin = GPIO_Pin_3;
+  GPIO_initStruct.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_initStruct.GPIO_OType = GPIO_OType_OD;
+  GPIO_initStruct.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_initStruct.GPIO_Speed = GPIO_Speed_2MHz;
+  GPIO_Init(GPIOA, &GPIO_initStruct);
+
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_USART2);
 
   // reset the cs43L22
   GPIO_ResetBits(GPIOD, GPIO_Pin_4);
@@ -115,27 +104,33 @@ void setupI2C() {
   I2C_Cmd(I2C1, ENABLE);
 }
 
-void setupADC() {
-  ADC_CommonInitTypeDef ADC_CommonInitType;
-  ADC_CommonStructInit(&ADC_CommonInitType);
-  ADC_CommonInitType.ADC_Mode = ADC_Mode_Independent;
-  ADC_CommonInitType.ADC_Prescaler = ADC_Prescaler_Div2;
-  ADC_CommonInitType.ADC_DMAAccessMode = ADC_DMAAccessMode_Disabled;
-  ADC_CommonInitType.ADC_TwoSamplingDelay = ADC_TwoSamplingDelay_5Cycles;
-  ADC_CommonInit(&ADC_CommonInitType);
+void setupUSART() {
+  USART_InitTypeDef USART_InitType;
+  USART_InitType.USART_BaudRate = 31250;
+  USART_InitType.USART_WordLength = USART_WordLength_8b;
+  USART_InitType.USART_StopBits = USART_StopBits_1;
+  USART_InitType.USART_Parity = USART_Parity_No;
+  USART_InitType.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitType.USART_Mode = USART_Mode_Rx;
+  USART_Init(USART2, &USART_InitType);
+  USART_Cmd(USART2, ENABLE);
+}
 
-  ADC_InitTypeDef ADC_InitType;
-  ADC_StructInit(&ADC_InitType);
-  ADC_InitType.ADC_Resolution = ADC_Resolution_12b;
-  ADC_InitType.ADC_ScanConvMode = DISABLE;
-  ADC_InitType.ADC_ContinuousConvMode = DISABLE;
-  ADC_InitType.ADC_ExternalTrigConvEdge = 0;
-  ADC_InitType.ADC_ExternalTrigConv = 0;
-  ADC_InitType.ADC_DataAlign = ADC_DataAlign_Right;
-  ADC_InitType.ADC_NbrOfConversion = 1;
-  ADC_Init(ADC1, &ADC_InitType);
-  ADC_Cmd(ADC1, ENABLE);
-  ADC_RegularChannelConfig(ADC1, ADC_Channel_11, 1, ADC_SampleTime_144Cycles);
+void setupIRC() {
+  SPI_I2S_ITConfig(SPI3, SPI_I2S_IT_TXE, ENABLE);
+  NVIC_InitTypeDef NVIC_InitType;
+  NVIC_InitType.NVIC_IRQChannel = SPI3_IRQn;
+  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitType);
+
+  USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+  NVIC_InitType.NVIC_IRQChannel = USART2_IRQn;
+  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitType.NVIC_IRQChannelSubPriority = 1;
+  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitType);
 }
 
 void writeI2CData(uint8_t bytesToSend[], uint8_t numOfBytesToSend){
@@ -215,14 +210,4 @@ void setupCS32L22(){
   sendBuffer[0] = 0x02; // this tells the board to not take any
   sendBuffer[1] = 0x9E; // new settings
   writeI2CData(sendBuffer, 2);
-}
-
-void setupIRC() {
-  SPI_I2S_ITConfig(SPI3, SPI_I2S_IT_TXE, ENABLE);
-  NVIC_InitTypeDef NVIC_InitType;
-  NVIC_InitType.NVIC_IRQChannel = SPI3_IRQn;
-  NVIC_InitType.NVIC_IRQChannelPreemptionPriority = 0;
-  NVIC_InitType.NVIC_IRQChannelSubPriority = 0;
-  NVIC_InitType.NVIC_IRQChannelCmd = ENABLE;
-  NVIC_Init(&NVIC_InitType);
 }

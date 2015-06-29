@@ -1,6 +1,9 @@
 #include "stm32f4xx_conf.h"
+#include "globals.h"
 #include "setup.h"
 #include "adsr.h"
+#include "filter.h"
+#include "note.h"
 #include <math.h>
 
 void fillInBuffer();
@@ -12,5 +15,3 @@ float getPhaseIncrementFromFrequency(float frequency);
 float sine(float phase, float phaseIncrement);
 float square(float phase, float phaseIncrement, float pulseWidthMod);
 float sawtooth(float phase, float phaseIncrement);
-float getInterpolatedValue(float value, float* array);
-int getADCValue();
