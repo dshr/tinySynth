@@ -1,5 +1,12 @@
 #include "filter.h"
 
+//
+// Adapted from Antti Huovilainen's Nonlinear Moog Ladder Filter implementation
+//
+// Huovilainen A. - Non-Linear Digital Implementation of the Moog Ladder Filter
+// 7th Int.Conference on Digital Audio Effects(DAFx'04)
+//
+
 #define OVERSAMPLING 2
 
 float tanhLookUpTable[6001];

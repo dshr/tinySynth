@@ -1,5 +1,14 @@
 #include "main.h"
 
+//
+// The PolyBLEP generation is adapter from the addendum of Phaseshaping
+// oscillator algorithms for musical sound synthesis by
+// Kleimola J., Lazzarini V., Timoney J., and Välimäki, V.
+//
+// http://research.spa.aalto.fi/publications/papers/smc2010-phaseshaping/
+// accessed on 13.12.2014
+//
+
 float samplingPeriod;
 float mtof[128];
 float sineWaveTable[513];

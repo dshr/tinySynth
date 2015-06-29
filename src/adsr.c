@@ -1,5 +1,13 @@
 #include "adsr.h"
 
+//
+// The decay and release bits are adapted from the Fast Exponential Envelope
+// Generator by Christian Shoenebeck
+//
+// http://www.musicdsp.org/showone.php?id=189
+// accessed on 09.02.2015
+//
+
 void initADSR(struct ADSR* adsr, unsigned a, unsigned d, float s, unsigned r){
 	setSustain(adsr, s);
 	setAttack(adsr, a);
